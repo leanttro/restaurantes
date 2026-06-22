@@ -77,7 +77,7 @@ def list_restaurants_public(
     if search:
         query = query.filter(Restaurant.name.ilike(f"%{search}%"))
     if status:
-        query = query.filter(Restaurant.status == status)
+        query = query.filter(Restaurant.is_active == (status == "active"))
     else:
         query = query.filter(Restaurant.is_active == True)
     items = query.limit(limit).all()
