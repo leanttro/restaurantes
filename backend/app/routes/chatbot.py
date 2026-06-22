@@ -7,13 +7,15 @@ from app.utils.db import get_db
 from app.schemas.chatbot import ChatMessage, ChatResponse
 from app.services.chatbot_service import ChatbotService
 
-# CORRIGIDO: prefixo vazio pois o router será montado em /api/restaurants
 router = APIRouter(tags=["Chatbot"])
 
 
-@router.get("/{restaurant_id}/chatbot/settings")
-def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
-    """Get chatbot settings for a restaurant."""
+@router.get("/chatbot/settings")
+def get_chatbot_settings(
+    restaurant_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Get chatbot settings — montado em /api/restaurants/{restaurant_id}"""
     from app.models.restaurant import Restaurant
 
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
@@ -29,13 +31,12 @@ def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/{restaurant_id}/chatbot/settings")
+@router.post("/chatbot/settings")
 def update_chatbot_settings(
     restaurant_id: UUID,
     data: dict,
     db: Session = Depends(get_db),
 ):
-    """Update chatbot settings for a restaurant."""
     from app.models.restaurant import Restaurant
 
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
@@ -53,10 +54,6 @@ def update_chatbot_settings(
 
 @router.post("/chatbot/message", response_model=ChatResponse)
 async def chat(data: ChatMessage, db: Session = Depends(get_db)):
-    """
-    Process an incoming chatbot message and return an AI-generated reply.
-    Público — chamado pelo widget web e pelo webhook do WhatsApp.
-    """
     svc = ChatbotService(db)
     result = await svc.process_message(
         restaurant_id=data.restaurant_id,
