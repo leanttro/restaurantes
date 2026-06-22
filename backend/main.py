@@ -84,6 +84,37 @@ def list_restaurants_public(
     return {"items": [r.to_dict() for r in items], "total": len(items)}
 
 
+@app.get("/api/restaurants/{restaurant_id}", tags=["Public"])
+def get_restaurant_public(
+    restaurant_id: str,
+    db: Session = Depends(get_db),
+):
+    from uuid import UUID
+    from sqlalchemy import or_
+    r = db.query(Restaurant).filter(
+        or_(Restaurant.slug == restaurant_id, Restaurant.id == restaurant_id)
+    ).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    return r.to_dict()
+
+
+@app.get("/api/restaurants/{restaurant_id}/analytics", tags=["Public"])
+def get_restaurant_analytics_public(
+    restaurant_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
+):
+    from uuid import UUID
+    from app.models.reservation import Reservation
+    from sqlalchemy import func
+    r = db.query(Restaurant).filter(Restaurant.id == UUID(restaurant_id)).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    total = db.query(Reservation).filter(Reservation.restaurant_id == r.id).count()
+    return {"total_reservations": total, "restaurant_id": str(r.id)}
+
+
 @app.post("/api/restaurants", tags=["Public"], status_code=201)
 def create_restaurant_public(
     data: RestaurantCreate,
