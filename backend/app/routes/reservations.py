@@ -12,6 +12,28 @@ from app.services.whatsapp_service import WhatsAppService
 router = APIRouter(tags=["Reservations"])
 
 
+@router.get("")
+def list_reservations(
+    restaurant_id: UUID = Query(...),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """List all reservations for a restaurant."""
+    from app.models.reservation import Reservation
+    
+    query = db.query(Reservation).filter(Reservation.restaurant_id == restaurant_id)
+    total = query.count()
+    items = query.order_by(Reservation.created_at.desc()).offset(offset).limit(limit).all()
+    
+    return {
+        "items": [r.to_dict() for r in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 @router.post("/check-availability")
 def check_availability(data: AvailabilityCheck, db: Session = Depends(get_db)):
     """Return available time slots and active promotions for a given date and party size."""
