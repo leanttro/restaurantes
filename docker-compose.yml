@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # ─── PostgreSQL ───────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: reserva_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reserva_db
+      POSTGRES_USER: reserva_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-senha_super_secreta_123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reserva_user -d reserva_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reserva_network
+
+  # ─── Backend FastAPI ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reserva_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      CELERY_BROKER_URL: sqla+postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      CELERY_RESULT_BACKEND: db+postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-https://seu-evolution-api.com}
+      EVOLUTION_API_TOKEN: ${EVOLUTION_API_TOKEN:-change_me}
+      GROQ_API_KEY: ${GROQ_API_KEY:-change_me}
+      SECRET_KEY: ${SECRET_KEY:-sua_chave_secreta_super_longa_32_caracteres_minimo}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      DEBUG: ${DEBUG:-false}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - reserva_network
+
+  # ─── Celery Worker ────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reserva_celery
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      DATABASE_URL: postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      CELERY_BROKER_URL: sqla+postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      CELERY_RESULT_BACKEND: db+postgresql://reserva_user:${DB_PASSWORD:-senha_super_secreta_123}@postgres:5432/reserva_db
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-https://seu-evolution-api.com}
+      EVOLUTION_API_TOKEN: ${EVOLUTION_API_TOKEN:-change_me}
+      GROQ_API_KEY: ${GROQ_API_KEY:-change_me}
+      SECRET_KEY: ${SECRET_KEY:-sua_chave_secreta_super_longa_32_caracteres_minimo}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - reserva_network
+
+  # ─── Frontend Next.js ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: reserva_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - reserva_network
+
+  # ─── Nginx (Reverse Proxy) ────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: reserva_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - reserva_network
+
+volumes:
+  postgres_data:
+    name: reserva_postgres_data
+
+networks:
+  reserva_network:
+    driver: bridge
+    name: reserva_network
