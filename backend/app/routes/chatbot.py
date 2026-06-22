@@ -1,5 +1,6 @@
 """Chatbot routes — public AI messaging endpoint."""
-from fastapi import APIRouter, Depends
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.utils.db import get_db
@@ -7,6 +8,49 @@ from app.schemas.chatbot import ChatMessage, ChatResponse
 from app.services.chatbot_service import ChatbotService
 
 router = APIRouter(tags=["Chatbot"])
+
+
+@router.get("/{restaurant_id}/settings")
+def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
+    """Get chatbot settings for a restaurant."""
+    from app.models.restaurant import Restaurant
+    
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    # Retorna configurações básicas do chatbot
+    return {
+        "restaurant_id": str(r.id),
+        "enabled": True,
+        "name": f"Assistente {r.name}",
+        "greeting": f"Olá! Bem-vindo ao {r.name}. Como posso ajudar?",
+        "theme": "light",
+    }
+
+
+@router.post("/{restaurant_id}/settings")
+def update_chatbot_settings(
+    restaurant_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db),
+):
+    """Update chatbot settings for a restaurant."""
+    from app.models.restaurant import Restaurant
+    
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    # Aqui você poderia salvar as configurações em um modelo ChatbotConfig
+    # Por enquanto, retorna as configurações atualizadas
+    return {
+        "restaurant_id": str(r.id),
+        "enabled": data.get("enabled", True),
+        "name": data.get("name", f"Assistente {r.name}"),
+        "greeting": data.get("greeting", f"Olá! Bem-vindo ao {r.name}. Como posso ajudar?"),
+        "theme": data.get("theme", "light"),
+    }
 
 
 @router.post("/message", response_model=ChatResponse)
