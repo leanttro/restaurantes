@@ -111,6 +111,29 @@ def update_restaurant_status(
     return r.to_dict()
 
 
+@router.delete("/restaurants/{restaurant_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_restaurant(restaurant_id: UUID, db: Session = Depends(get_db)):
+    """Delete a restaurant and its associated owner user."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    owner_id = r.owner_id
+    
+    # Delete the restaurant
+    db.delete(r)
+    db.commit()
+
+    # Delete the associated owner user
+    if owner_id:
+        owner = db.query(User).filter(User.id == owner_id).first()
+        if owner:
+            db.delete(owner)
+            db.commit()
+
+    logger.info(f"Restaurant {restaurant_id} and its owner deleted")
+
+
 @router.get("/restaurants/{restaurant_id}/analytics", response_model=dict)
 def get_analytics(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Aggregate analytics for a restaurant."""
