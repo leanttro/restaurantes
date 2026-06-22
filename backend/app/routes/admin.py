@@ -2,7 +2,8 @@
 import logging
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,10 @@ from app.utils.security import hash_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Admin"], dependencies=[Depends(require_role(UserRole.SUPER_ADMIN))])
+
+
+class StatusUpdate(BaseModel):
+    status: str
 
 
 @router.get("/restaurants", response_model=dict)
@@ -49,15 +54,11 @@ def create_restaurant(
     db: Session = Depends(get_db),
 ):
     """Create a new restaurant and assign an owner."""
-    # Verify slug uniqueness
     if db.query(Restaurant).filter(Restaurant.slug == data.slug).first():
-        from fastapi import HTTPException
         raise HTTPException(status_code=409, detail="Slug already in use")
 
-    # Find or create owner user
     owner = db.query(User).filter(User.email == owner_email).first()
     if not owner:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Owner user not found")
 
     restaurant = Restaurant(**data.model_dump(), owner_id=owner.id)
@@ -71,7 +72,6 @@ def create_restaurant(
 @router.get("/restaurants/{restaurant_id}", response_model=dict)
 def get_restaurant(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Get a single restaurant by ID."""
-    from fastapi import HTTPException
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurant not found")
@@ -81,7 +81,6 @@ def get_restaurant(restaurant_id: UUID, db: Session = Depends(get_db)):
 @router.put("/restaurants/{restaurant_id}", response_model=dict)
 def update_restaurant(restaurant_id: UUID, data: RestaurantUpdate, db: Session = Depends(get_db)):
     """Update restaurant details."""
-    from fastapi import HTTPException
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurant not found")
@@ -94,10 +93,27 @@ def update_restaurant(restaurant_id: UUID, data: RestaurantUpdate, db: Session =
     return r.to_dict()
 
 
+@router.patch("/restaurants/{restaurant_id}/status", response_model=dict)
+def update_restaurant_status(
+    restaurant_id: UUID,
+    data: StatusUpdate,
+    db: Session = Depends(get_db),
+):
+    """Toggle restaurant active status."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    r.is_active = data.status == "active"
+    db.commit()
+    db.refresh(r)
+    logger.info(f"Restaurant {restaurant_id} status updated to: {data.status}")
+    return r.to_dict()
+
+
 @router.get("/restaurants/{restaurant_id}/analytics", response_model=dict)
 def get_analytics(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Aggregate analytics for a restaurant."""
-    from fastapi import HTTPException
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurant not found")
@@ -134,7 +150,6 @@ def get_global_analytics(db: Session = Depends(get_db)):
     active_restaurants = db.query(Restaurant).filter(Restaurant.is_active == True).count()
     total_reservations = db.query(Reservation).count()
 
-    # Reservations by day (last 30 days)
     from datetime import date, timedelta
     from sqlalchemy import cast, Date as SADate
     thirty_days_ago = date.today() - timedelta(days=30)
