@@ -86,17 +86,14 @@ def list_restaurants_public(
 @app.post("/api/restaurants", tags=["Public"], status_code=201)
 def create_restaurant_public(
     data: RestaurantCreate,
-    owner_email: str = Query(..., description="Email do dono do restaurante"),
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
-    """Cria um novo restaurante. Apenas super_admin."""
+    """Cria um novo restaurante. Apenas super_admin. O próprio usuário logado vira dono."""
     if db.query(Restaurant).filter(Restaurant.slug == data.slug).first():
         raise HTTPException(status_code=409, detail="Slug já está em uso")
 
-    owner = db.query(User).filter(User.email == owner_email).first()
-    if not owner:
-        raise HTTPException(status_code=404, detail="Usuário dono não encontrado")
+    owner = current_user  # usa o super_admin logado como dono
 
     restaurant = Restaurant(**data.model_dump(), owner_id=owner.id)
     db.add(restaurant)
