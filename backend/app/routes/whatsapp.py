@@ -1,5 +1,6 @@
 """WhatsApp webhook route — receives Evolution API callbacks."""
 import logging
+from uuid import UUID
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,74 @@ from app.services.chatbot_service import ChatbotService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["WhatsApp"])
+
+
+@router.get("/{restaurant_id}/status")
+def get_whatsapp_status(restaurant_id: UUID, db: Session = Depends(get_db)):
+    """Get WhatsApp connection status for a restaurant."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    return {
+        "restaurant_id": str(r.id),
+        "connected": bool(r.evolution_instance_id),
+        "instance_id": r.evolution_instance_id or None,
+        "phone": r.phone or None,
+        "status": "active" if r.is_active else "inactive",
+    }
+
+
+@router.get("/{restaurant_id}/templates")
+def get_whatsapp_templates(restaurant_id: UUID, db: Session = Depends(get_db)):
+    """Get WhatsApp message templates for a restaurant."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    # Templates padrão
+    templates = [
+        {
+            "id": "reservation_confirmation",
+            "name": "Confirmação de Reserva",
+            "content": "Olá {{customer_name}}, sua reserva foi confirmada para {{date}} às {{time}}.",
+        },
+        {
+            "id": "reservation_reminder",
+            "name": "Lembrete de Reserva",
+            "content": "Oi {{customer_name}}, lembrete: você tem uma reserva hoje às {{time}}. Até logo!",
+        },
+        {
+            "id": "reservation_cancelled",
+            "name": "Cancelamento de Reserva",
+            "content": "Sua reserva foi cancelada. Se tiver dúvidas, entre em contato conosco.",
+        },
+    ]
+    
+    return {
+        "restaurant_id": str(r.id),
+        "templates": templates,
+    }
+
+
+@router.post("/{restaurant_id}/templates")
+def create_whatsapp_template(
+    restaurant_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db),
+):
+    """Create a new WhatsApp message template."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    template = {
+        "id": data.get("id", f"template_{len([1])}"),
+        "name": data.get("name", "Novo Template"),
+        "content": data.get("content", ""),
+    }
+    
+    return {"status": "created", "template": template}
 
 
 @router.post("/webhook")
