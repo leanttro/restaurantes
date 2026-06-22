@@ -1,13 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Power, Search } from 'lucide-react'
+import { Plus, Power, Search, Pencil, Trash2 } from 'lucide-react'
 import { restaurantsService } from '@/services/restaurants'
 import { formatDate } from '@/utils/formatting'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { ApiError } from '@/types/api'
 import { Restaurant, RestaurantStatus } from '@/types'
 import { CreateRestaurantModal } from '@/components/admin/CreateRestaurantModal'
+import { EditRestaurantModal } from '@/components/admin/EditRestaurantModal'
 
 const STATUS_LABEL: Record<RestaurantStatus, string> = { active: 'Ativo', inactive: 'Inativo', pending: 'Pendente' }
 const STATUS_CLASS: Record<RestaurantStatus, string> = { active: 'status-pill--confirmed', inactive: 'status-pill--cancelled', pending: 'status-pill--pending' }
@@ -18,7 +19,10 @@ export function RestaurantList() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<RestaurantStatus | 'all'>('all')
-  const [showModal, setShowModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<Restaurant | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -40,16 +44,70 @@ export function RestaurantList() {
 
   function handleCreated(r: Restaurant) {
     setRestaurants((p) => [r, ...p])
-    setShowModal(false)
+    setShowCreateModal(false)
+  }
+
+  function handleUpdated(r: Restaurant) {
+    setRestaurants((p) => p.map((x) => (x.id === r.id ? r : x)))
+    setEditingRestaurant(null)
+  }
+
+  async function handleDelete(r: Restaurant) {
+    setDeleting(true)
+    try {
+      await restaurantsService.deleteRestaurant(r.id)
+      setRestaurants((p) => p.filter((x) => x.id !== r.id))
+      setDeleteConfirm(null)
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao deletar restaurante.'
+      setError(message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
     <div>
-      {showModal && (
+      {showCreateModal && (
         <CreateRestaurantModal
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowCreateModal(false)}
           onCreated={handleCreated}
         />
+      )}
+
+      {editingRestaurant && (
+        <EditRestaurantModal
+          restaurant={editingRestaurant}
+          onClose={() => setEditingRestaurant(null)}
+          onUpdated={handleUpdated}
+        />
+      )}
+
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+            <h3 className="mb-2 text-lg font-semibold">Excluir restaurante?</h3>
+            <p className="mb-6 text-ink-600">
+              Tem certeza que deseja excluir <strong>{deleteConfirm.name}</strong>? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="btn-ghost flex-1"
+                disabled={deleting}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="btn-primary flex-1 !bg-red-600 hover:!bg-red-700"
+                disabled={deleting}
+              >
+                {deleting ? 'Deletando…' : 'Deletar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -72,7 +130,7 @@ export function RestaurantList() {
             <option key={v} value={v}>{l}</option>
           ))}
         </select>
-        <button onClick={() => setShowModal(true)} className="btn-primary">
+        <button onClick={() => setShowCreateModal(true)} className="btn-primary">
           <Plus size={15} /> Novo restaurante
         </button>
       </div>
@@ -106,11 +164,25 @@ export function RestaurantList() {
                         Analytics
                       </Link>
                       <button
+                        onClick={() => setEditingRestaurant(r)}
+                        className="btn-ghost !py-1.5 text-xs"
+                        title="Editar"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
                         onClick={() => toggleStatus(r)}
                         className="btn-ghost !py-1.5 text-xs"
                         title={r.status === 'active' ? 'Desativar' : 'Ativar'}
                       >
                         <Power size={13} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(r)}
+                        className="btn-ghost !py-1.5 text-xs text-red-600 hover:text-red-700"
+                        title="Deletar"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>
