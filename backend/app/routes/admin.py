@@ -123,3 +123,36 @@ def get_analytics(restaurant_id: UUID, db: Session = Depends(get_db)):
         "cancellation_rate": round(cancelled / max(total, 1) * 100, 1),
         "avg_party_size": round(float(avg_party), 1),
     }
+
+
+@router.get("/analytics", response_model=dict)
+def get_global_analytics(db: Session = Depends(get_db)):
+    """Global analytics summary for super_admin dashboard."""
+    from app.models.reservation import Reservation
+
+    total_restaurants = db.query(Restaurant).count()
+    active_restaurants = db.query(Restaurant).filter(Restaurant.is_active == True).count()
+    total_reservations = db.query(Reservation).count()
+
+    # Reservations by day (last 30 days)
+    from datetime import date, timedelta
+    from sqlalchemy import cast, Date as SADate
+    thirty_days_ago = date.today() - timedelta(days=30)
+    by_day_rows = (
+        db.query(
+            cast(Reservation.created_at, SADate).label("day"),
+            func.count(Reservation.id).label("count"),
+        )
+        .filter(Reservation.created_at >= thirty_days_ago)
+        .group_by(cast(Reservation.created_at, SADate))
+        .order_by(cast(Reservation.created_at, SADate))
+        .all()
+    )
+
+    return {
+        "total_restaurants": total_restaurants,
+        "active_restaurants": active_restaurants,
+        "total_reservations": total_reservations,
+        "revenue_estimate": 0,
+        "reservations_by_day": [{"date": str(r.day), "count": r.count} for r in by_day_rows],
+    }
