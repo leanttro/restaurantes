@@ -5,6 +5,7 @@ Docs available at /docs (Swagger) and /redoc (ReDoc).
 """
 import logging
 from fastapi import FastAPI, Depends, Query, HTTPException, status
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -103,10 +104,13 @@ def create_restaurant_public(
     return restaurant.to_dict()
 
 
+class StatusUpdate(BaseModel):
+    status: str
+
 @app.patch("/api/restaurants/{restaurant_id}/status", tags=["Public"])
 def set_restaurant_status(
     restaurant_id,
-    status: str = Query(..., description="active ou inactive"),
+    data: StatusUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
@@ -115,8 +119,7 @@ def set_restaurant_status(
     r = db.query(Restaurant).filter(Restaurant.id == UUID(str(restaurant_id))).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    r.status = status
-    r.is_active = (status == "active")
+    r.is_active = (data.status == "active")
     db.commit()
     db.refresh(r)
     return r.to_dict()
