@@ -1,8 +1,10 @@
 """Authentication business logic."""
+import re
 import logging
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.user import User
+from app.models.restaurant import Restaurant
 from app.schemas.user import UserRegister
 from app.utils.security import hash_password, create_access_token, create_refresh_token, decode_token
 from app.utils.constants import UserRole
@@ -15,7 +17,7 @@ class AuthService:
         self.db = db
 
     def register(self, data: UserRegister) -> User:
-        """Create a new user account."""
+        """Create a new user account, and a restaurant if restaurant_name is provided."""
         existing = self.db.query(User).filter(User.email == data.email).first()
         if existing:
             raise HTTPException(
@@ -23,12 +25,28 @@ class AuthService:
                 detail="Email already registered",
             )
 
-        # Only super_admin can self-register as super_admin — enforce via operator seeding instead
         if data.role == UserRole.SUPER_ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot self-register as super_admin",
             )
+
+        # Cria restaurante se vier restaurant_name
+        restaurant = None
+        if data.restaurant_name:
+            slug = re.sub(r'[^a-z0-9]+', '-', data.restaurant_name.lower()).strip('-')
+            if self.db.query(Restaurant).filter(Restaurant.slug == slug).first():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Slug '{slug}' já está em uso. Escolha outro nome para o restaurante.",
+                )
+            restaurant = Restaurant(
+                name=data.restaurant_name,
+                slug=slug,
+                is_active=True,
+            )
+            self.db.add(restaurant)
+            self.db.flush()  # gera o ID sem commitar ainda
 
         user = User(
             email=data.email,
@@ -36,12 +54,20 @@ class AuthService:
             full_name=data.full_name,
             phone=data.phone,
             role=data.role,
-            restaurant_id=data.restaurant_id,
+            restaurant_id=restaurant.id if restaurant else data.restaurant_id,
         )
         self.db.add(user)
+        self.db.flush()  # gera o ID do user
+
+        # Vincula o dono ao restaurante
+        if restaurant:
+            restaurant.owner_id = user.id
+
         self.db.commit()
         self.db.refresh(user)
         logger.info(f"New user registered: {user.email} ({user.role})")
+        if restaurant:
+            logger.info(f"Restaurant created: {restaurant.name} (slug={restaurant.slug})")
         return user
 
     def login(self, email: str, password: str) -> dict:
