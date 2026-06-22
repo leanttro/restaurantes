@@ -1,132 +1,115 @@
 'use client'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Plus, Power, Search } from 'lucide-react'
-import { restaurantsService } from '@/services/restaurants'
-import { formatDate } from '@/utils/formatting'
-import { LoadingSpinner } from '@/components/common/LoadingSpinner'
-import { ApiError } from '@/types/api'
-import { Restaurant, RestaurantStatus } from '@/types'
-import { CreateRestaurantModal } from '@/components/admin/CreateRestaurantModal'
+import { useState } from 'react'
+import { X } from 'lucide-react'
+import { api } from '@/services/api'
+import { Restaurant } from '@/types'
 
-const STATUS_LABEL: Record<RestaurantStatus, string> = { active: 'Ativo', inactive: 'Inativo', pending: 'Pendente' }
-const STATUS_CLASS: Record<RestaurantStatus, string> = { active: 'status-pill--confirmed', inactive: 'status-pill--cancelled', pending: 'status-pill--pending' }
+interface Props {
+  onClose: () => void
+  onCreated: (r: Restaurant) => void
+}
 
-export function RestaurantList() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([])
-  const [loading, setLoading] = useState(true)
+const FIELDS = [
+  { key: 'name',        label: 'Nome do restaurante', required: true,  type: 'text' },
+  { key: 'slug',        label: 'Slug (URL)',           required: true,  type: 'text',  hint: 'Ex: meu-restaurante (sem espaços)' },
+  { key: 'owner_email', label: 'E-mail do dono',       required: true,  type: 'email', hint: 'Usuário já deve estar cadastrado' },
+  { key: 'phone',       label: 'Telefone',             required: false, type: 'text' },
+  { key: 'address',     label: 'Endereço',             required: false, type: 'text' },
+  { key: 'city',        label: 'Cidade',               required: false, type: 'text' },
+  { key: 'description', label: 'Descrição',            required: false, type: 'textarea' },
+] as const
+
+type FieldKey = typeof FIELDS[number]['key']
+
+export function CreateRestaurantModal({ onClose, onCreated }: Props) {
+  const [form, setForm] = useState<Record<FieldKey, string>>({
+    name: '', slug: '', owner_email: '', phone: '', address: '', city: '', description: '',
+  })
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<RestaurantStatus | 'all'>('all')
-  const [showModal, setShowModal] = useState(false)
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(true)
-      restaurantsService
-        .getRestaurants({ search: search || undefined, status: statusFilter === 'all' ? undefined : statusFilter, limit: 50 })
-        .then((r) => setRestaurants(r.items))
-        .catch((e) => setError(e instanceof ApiError ? e.message : 'Erro.'))
-        .finally(() => setLoading(false))
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search, statusFilter])
-
-  async function toggleStatus(r: Restaurant) {
-    const next = r.status === 'active' ? 'inactive' : 'active'
-    const u = await restaurantsService.setStatus(r.id, next)
-    setRestaurants((p) => p.map((x) => (x.id === r.id ? u : x)))
+  function handleNameChange(value: string) {
+    const slug = value
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+    setForm((f) => ({ ...f, name: value, slug }))
   }
 
-  function handleCreated(r: Restaurant) {
-    setRestaurants((p) => [r, ...p])
-    setShowModal(false)
+  async function handleSubmit() {
+    setError(null)
+    if (!form.name || !form.slug || !form.owner_email) {
+      setError('Preencha os campos obrigatórios.')
+      return
+    }
+    setLoading(true)
+    try {
+      const { owner_email, ...body } = form
+      const { data } = await api.post<Restaurant>(
+        `/admin/restaurants?owner_email=${encodeURIComponent(owner_email)}`,
+        body,
+      )
+      onCreated(data)
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao criar restaurante.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div>
-      {showModal && (
-        <CreateRestaurantModal
-          onClose={() => setShowModal(false)}
-          onCreated={handleCreated}
-        />
-      )}
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome…"
-            className="input-field pl-9"
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4 backdrop-blur-sm">
+      <div className="card w-full max-w-lg">
+        <div className="flex items-center justify-between border-b border-ink-900/8 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-ink-900">Novo restaurante</h2>
+          <button onClick={onClose} className="btn-ghost !p-1.5"><X size={16} /></button>
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as RestaurantStatus | 'all')}
-          className="input-field !w-auto"
-        >
-          <option value="all">Todos os status</option>
-          {Object.entries(STATUS_LABEL).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
-        <button onClick={() => setShowModal(true)} className="btn-primary">
-          <Plus size={15} /> Novo restaurante
-        </button>
-      </div>
 
-      {loading && <LoadingSpinner label="Carregando…" />}
-      {error && <p className="error-text">{error}</p>}
-      {!loading && !error && (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-sand-100 text-left text-xs font-semibold uppercase tracking-wide text-ink-600">
-              <tr>
-                <th className="px-4 py-3">Restaurante</th>
-                <th className="px-4 py-3">Cidade</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Desde</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-900/8">
-              {restaurants.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
-                  <td className="px-4 py-3 text-ink-600">{r.city}</td>
-                  <td className="px-4 py-3">
-                    <span className={`status-pill ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                  </td>
-                  <td className="px-4 py-3 text-ink-600">{formatDate(r.created_at)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/admin/restaurants/${r.id}/analytics`} className="btn-ghost !py-1.5 text-xs">
-                        Analytics
-                      </Link>
-                      <button
-                        onClick={() => toggleStatus(r)}
-                        className="btn-ghost !py-1.5 text-xs"
-                        title={r.status === 'active' ? 'Desativar' : 'Ativar'}
-                      >
-                        <Power size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {restaurants.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-ink-600">
-                    Nenhum restaurante encontrado.
-                  </td>
-                </tr>
+        <div className="space-y-4 px-6 py-5">
+          {FIELDS.map(({ key, label, required, type, hint }) => (
+            <div key={key}>
+              <label className="label-field">
+                {label} {required && <span className="text-rust-600">*</span>}
+              </label>
+              {type === 'textarea' ? (
+                <textarea
+                  rows={3}
+                  value={form[key]}
+                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                  className="input-field resize-none"
+                  placeholder={label}
+                />
+              ) : (
+                <input
+                  type={type}
+                  value={form[key]}
+                  onChange={(e) =>
+                    key === 'name'
+                      ? handleNameChange(e.target.value)
+                      : setForm((f) => ({ ...f, [key]: e.target.value }))
+                  }
+                  className="input-field"
+                  placeholder={hint ?? label}
+                />
               )}
-            </tbody>
-          </table>
+              {hint && key !== 'name' && (
+                <p className="mt-1 text-xs text-ink-400">{hint}</p>
+              )}
+            </div>
+          ))}
+
+          {error && <p className="error-text">{error}</p>}
         </div>
-      )}
+
+        <div className="flex justify-end gap-2 border-t border-ink-900/8 px-6 py-4">
+          <button onClick={onClose} className="btn-secondary" disabled={loading}>Cancelar</button>
+          <button onClick={handleSubmit} className="btn-primary" disabled={loading}>
+            {loading ? 'Criando…' : 'Criar restaurante'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
