@@ -54,13 +54,18 @@ app.add_middleware(
 
 # ──────────────────────────────────────────────
 # Routers
+# ORDEM IMPORTA: routers com paths específicos ANTES dos genéricos
 # ──────────────────────────────────────────────
-app.include_router(auth.router, prefix="/api/auth")
-app.include_router(admin.router, prefix="/api/admin")
-app.include_router(restaurants.router, prefix="/api/restaurants")
+app.include_router(auth.router,         prefix="/api/auth")
+app.include_router(admin.router,        prefix="/api/admin")
 app.include_router(reservations.router, prefix="/api/reservations")
-app.include_router(chatbot.router, prefix="/api/restaurants")
-app.include_router(whatsapp.router, prefix="/api/restaurants")
+
+# Routers de restaurante — registrados ANTES das rotas genéricas definidas
+# inline abaixo, para evitar que /{restaurant_id} engula os sub-paths
+# (ex: /{id}/chatbot/settings, /{id}/whatsapp/status)
+app.include_router(restaurants.router, prefix="/api/restaurants")
+app.include_router(chatbot.router,     prefix="/api/restaurants")
+app.include_router(whatsapp.router,    prefix="/api/restaurants")
 
 
 # ──────────────────────────────────────────────
@@ -84,6 +89,45 @@ def list_restaurants_public(
     return {"items": [r.to_dict() for r in items], "total": len(items)}
 
 
+# CORRIGIDO: analytics liberado para super_admin E restaurant_admin
+@app.get("/api/restaurants/{restaurant_id}/analytics", tags=["Restaurants"])
+def get_restaurant_analytics(
+    restaurant_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from uuid import UUID
+    from app.models.reservation import Reservation
+
+    try:
+        uid = UUID(restaurant_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="restaurant_id inválido")
+
+    r = db.query(Restaurant).filter(Restaurant.id == uid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+
+    # super_admin vê tudo; restaurant_admin só vê o próprio restaurante
+    is_super = current_user.role == UserRole.SUPER_ADMIN
+    is_owner = str(r.owner_id) == str(current_user.id)
+    if not (is_super or is_owner):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    total = db.query(Reservation).filter(Reservation.restaurant_id == r.id).count()
+    confirmed = db.query(Reservation).filter(
+        Reservation.restaurant_id == r.id,
+        Reservation.status == "confirmed",
+    ).count()
+    return {
+        "restaurant_id": str(r.id),
+        "total_reservations": total,
+        "confirmed_reservations": confirmed,
+    }
+
+
+# CORRIGIDO: rota genérica por slug/UUID — deve ficar DEPOIS de /analytics
+# para não engolir sub-paths registrados via router acima
 @app.get("/api/restaurants/{restaurant_id}", tags=["Public"])
 def get_restaurant_public(
     restaurant_id: str,
@@ -106,22 +150,6 @@ def get_restaurant_public(
     return r.to_dict()
 
 
-@app.get("/api/restaurants/{restaurant_id}/analytics", tags=["Public"])
-def get_restaurant_analytics_public(
-    restaurant_id: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
-):
-    from uuid import UUID
-    from app.models.reservation import Reservation
-    from sqlalchemy import func
-    r = db.query(Restaurant).filter(Restaurant.id == UUID(restaurant_id)).first()
-    if not r:
-        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    total = db.query(Reservation).filter(Reservation.restaurant_id == r.id).count()
-    return {"total_reservations": total, "restaurant_id": str(r.id)}
-
-
 @app.post("/api/restaurants", tags=["Public"], status_code=201)
 def create_restaurant_public(
     data: RestaurantCreate,
@@ -132,8 +160,7 @@ def create_restaurant_public(
     if db.query(Restaurant).filter(Restaurant.slug == data.slug).first():
         raise HTTPException(status_code=409, detail="Slug já está em uso")
 
-    owner = current_user  # usa o super_admin logado como dono
-
+    owner = current_user
     restaurant = Restaurant(**data.model_dump(), owner_id=owner.id)
     db.add(restaurant)
     db.commit()
@@ -145,16 +172,17 @@ def create_restaurant_public(
 class StatusUpdate(BaseModel):
     status: str
 
+
 @app.patch("/api/restaurants/{restaurant_id}/status", tags=["Public"])
 def set_restaurant_status(
-    restaurant_id,
+    restaurant_id: str,
     data: StatusUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
     """Ativa ou desativa um restaurante. Apenas super_admin."""
     from uuid import UUID
-    r = db.query(Restaurant).filter(Restaurant.id == UUID(str(restaurant_id))).first()
+    r = db.query(Restaurant).filter(Restaurant.id == UUID(restaurant_id)).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
     r.is_active = (data.status == "active")
