@@ -14,6 +14,7 @@ class UserRegister(BaseModel):
     phone: Optional[str] = None
     role: str = UserRole.CLIENT
     restaurant_id: Optional[UUID] = None
+    restaurant_name: Optional[str] = None
 
     @field_validator("password")
     @classmethod
