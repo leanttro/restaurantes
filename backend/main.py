@@ -57,7 +57,7 @@ app.add_middleware(
 # ──────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(admin.router, prefix="/api/admin")
-app.include_router(restaurants.router, prefix="/api/restaurant")
+app.include_router(restaurants.router, prefix="/api/restaurants")
 app.include_router(reservations.router, prefix="/api/reservations")
 app.include_router(chatbot.router, prefix="/api/chatbot")
 app.include_router(whatsapp.router, prefix="/api/whatsapp")
