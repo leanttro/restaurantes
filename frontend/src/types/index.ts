@@ -2,7 +2,7 @@ export type UserRole = 'restaurant_admin' | 'super_admin'
 
 export interface User {
   id: string
-  name: string
+  full_name: string
   email: string
   role: UserRole
   restaurant_id?: string | null
@@ -16,7 +16,7 @@ export interface AuthTokens {
 }
 
 export interface LoginPayload { email: string; password: string }
-export interface RegisterPayload { name: string; email: string; password: string; role: UserRole; restaurant_name?: string }
+export interface RegisterPayload { full_name: string; email: string; password: string; role: UserRole; restaurant_name?: string }
 
 export type RestaurantStatus = 'active' | 'inactive' | 'pending'
 
