@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: reserva
+      POSTGRES_PASSWORD: reserva_pass
+      POSTGRES_DB: reserva
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reserva"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://reserva:reserva_pass@postgres:5432/reserva
+      CELERY_BROKER_URL: sqla+postgresql://reserva:reserva_pass@postgres:5432/reserva
+      CELERY_RESULT_BACKEND: db+postgresql://reserva:reserva_pass@postgres:5432/reserva
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://reserva:reserva_pass@postgres:5432/reserva
+      CELERY_BROKER_URL: sqla+postgresql://reserva:reserva_pass@postgres:5432/reserva
+      CELERY_RESULT_BACKEND: db+postgresql://reserva:reserva_pass@postgres:5432/reserva
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "-B"]
+
+volumes:
+  postgres_data:
