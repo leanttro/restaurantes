@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["WhatsApp"])
 
 
-@router.get("/{restaurant_id}/status")
+@router.get("/{restaurant_id}/whatsapp/status")
 def get_whatsapp_status(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Get WhatsApp connection status for a restaurant."""
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
@@ -28,7 +28,7 @@ def get_whatsapp_status(restaurant_id: UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/{restaurant_id}/templates")
+@router.get("/{restaurant_id}/whatsapp/templates")
 def get_whatsapp_templates(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Get WhatsApp message templates for a restaurant."""
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
@@ -60,7 +60,7 @@ def get_whatsapp_templates(restaurant_id: UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/{restaurant_id}/templates")
+@router.post("/{restaurant_id}/whatsapp/templates")
 def create_whatsapp_template(
     restaurant_id: UUID,
     data: dict,
@@ -78,6 +78,29 @@ def create_whatsapp_template(
     }
     
     return {"status": "created", "template": template}
+
+
+@router.post("/{restaurant_id}/whatsapp/connect")
+def connect_whatsapp(
+    restaurant_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db),
+):
+    """Connect WhatsApp to a restaurant."""
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    
+    # Atualiza o instance_id
+    r.evolution_instance_id = data.get("instance_id")
+    db.commit()
+    db.refresh(r)
+    
+    return {
+        "status": "connected",
+        "restaurant_id": str(r.id),
+        "instance_id": r.evolution_instance_id,
+    }
 
 
 @router.post("/webhook")
