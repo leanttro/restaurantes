@@ -36,20 +36,19 @@ app.add_middleware(
 )
 
 # ── Routers ────────────────────────────────────────────────
+# ORDEM IMPORTA: routers específicos ANTES das rotas inline genéricas
 app.include_router(auth.router,         prefix="/api/auth")
 app.include_router(admin.router,        prefix="/api/admin")
 app.include_router(reservations.router, prefix="/api/reservations")
-app.include_router(restaurants.router,  prefix="/api/restaurants")
-app.include_router(whatsapp.router,     prefix="/api/restaurants")
 
-# CORRIGIDO: chatbot montado com {restaurant_id} no prefixo
-# Isso garante que /chatbot/settings NÃO conflita com /{restaurant_id} inline
-app.include_router(
-    chatbot.router,
-    prefix="/api/restaurants/{restaurant_id}",
-)
+# chatbot e whatsapp ANTES de restaurants para que
+# /{restaurant_id}/chatbot/settings não seja engolido por /{restaurant_id}
+app.include_router(chatbot.router,     prefix="/api/restaurants")
+app.include_router(whatsapp.router,    prefix="/api/restaurants")
+app.include_router(restaurants.router, prefix="/api/restaurants")
 
-# ── Rotas inline — DEPOIS dos routers ─────────────────────
+
+# ── Rotas inline — todas DEPOIS dos routers ───────────────
 
 @app.get("/api/restaurants", tags=["Public"])
 def list_restaurants_public(
@@ -92,7 +91,6 @@ def get_restaurant_analytics(
     if not (is_super or is_owner):
         raise HTTPException(status_code=403, detail="Acesso negado")
 
-    from app.models.reservation import Reservation
     total = db.query(Reservation).filter(Reservation.restaurant_id == r.id).count()
     confirmed = db.query(Reservation).filter(
         Reservation.restaurant_id == r.id,
@@ -141,7 +139,7 @@ def set_restaurant_status(
     return r.to_dict()
 
 
-# Rota genérica por slug/UUID — ÚLTIMA, para não engolir sub-paths
+# Rota genérica — ÚLTIMA obrigatoriamente
 @app.get("/api/restaurants/{restaurant_id}", tags=["Public"])
 def get_restaurant_public(restaurant_id: str, db: Session = Depends(get_db)):
     r = db.query(Restaurant).filter(Restaurant.slug == restaurant_id).first()
