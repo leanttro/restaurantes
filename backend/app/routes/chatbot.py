@@ -10,12 +10,12 @@ from app.services.chatbot_service import ChatbotService
 router = APIRouter(tags=["Chatbot"])
 
 
-@router.get("/chatbot/settings")
+# path completo aqui — montado em /api/restaurants pelo main.py
+@router.get("/{restaurant_id}/chatbot/settings")
 def get_chatbot_settings(
     restaurant_id: UUID,
     db: Session = Depends(get_db),
 ):
-    """Get chatbot settings — montado em /api/restaurants/{restaurant_id}"""
     from app.models.restaurant import Restaurant
 
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
@@ -31,7 +31,7 @@ def get_chatbot_settings(
     }
 
 
-@router.post("/chatbot/settings")
+@router.post("/{restaurant_id}/chatbot/settings")
 def update_chatbot_settings(
     restaurant_id: UUID,
     data: dict,
