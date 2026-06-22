@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Reserva de Restaurantes API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+    ENVIRONMENT: str = "production"
 
     # Database
     DATABASE_URL: str = "postgresql://user:pass@postgres:5432/reserva"
@@ -35,10 +36,12 @@ class Settings(BaseSettings):
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["*"]
+    FRONTEND_URL: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignora variáveis extras no .env
 
 
 @lru_cache()
