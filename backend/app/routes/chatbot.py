@@ -84,3 +84,28 @@ async def chat(
         user_message=data.message,
     )
     return ChatResponse(reply=result["reply"], conversation_id=result["conversation_id"])
+
+
+@router.post("/{restaurant_id}/chatbot/test")
+async def test_chatbot(
+    restaurant_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db),
+):
+    """Testa o chatbot com uma mensagem avulsa, sem salvar conversa."""
+    from app.models.restaurant import Restaurant
+    r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+
+    message = data.get("message", "").strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="message é obrigatório")
+
+    svc = ChatbotService(db)
+    result = await svc.process_message(
+        restaurant_id=restaurant_id,
+        client_phone="test_dashboard",
+        user_message=message,
+    )
+    return {"reply": result["reply"]}
