@@ -18,7 +18,7 @@ def get_whatsapp_status(restaurant_id: UUID, db: Session = Depends(get_db)):
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    
+
     return {
         "restaurant_id": str(r.id),
         "connected": bool(r.evolution_instance_id),
@@ -34,8 +34,7 @@ def get_whatsapp_templates(restaurant_id: UUID, db: Session = Depends(get_db)):
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    
-    # Templates padrão
+
     templates = [
         {
             "id": "reservation_confirmation",
@@ -53,11 +52,8 @@ def get_whatsapp_templates(restaurant_id: UUID, db: Session = Depends(get_db)):
             "content": "Sua reserva foi cancelada. Se tiver dúvidas, entre em contato conosco.",
         },
     ]
-    
-    return {
-        "restaurant_id": str(r.id),
-        "templates": templates,
-    }
+
+    return {"restaurant_id": str(r.id), "templates": templates}
 
 
 @router.post("/{restaurant_id}/whatsapp/templates")
@@ -70,26 +66,22 @@ def create_whatsapp_template(
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    
+
     template = {
-        "id": data.get("id", f"template_{len([1])}"),
+        "id": data.get("id", "template_new"),
         "name": data.get("name", "Novo Template"),
         "content": data.get("content", ""),
     }
-    
     return {"status": "created", "template": template}
 
 
 @router.post("/{restaurant_id}/whatsapp/connect")
-def connect_whatsapp(
-    restaurant_id: UUID,
-    db: Session = Depends(get_db),
-):
+def connect_whatsapp(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Connect WhatsApp to a restaurant."""
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    
+
     return {
         "status": "connected",
         "restaurant_id": str(r.id),
@@ -97,14 +89,13 @@ def connect_whatsapp(
     }
 
 
-@router.post("/webhook")
+# CORRIGIDO: webhook em rota separada, fora do prefixo /restaurants
+@router.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Receive incoming WhatsApp messages from Evolution API.
-
-    Evolution API sends a POST with JSON payload whenever a message arrives
-    on any connected instance. We extract the sender phone, find the restaurant
-    by evolution_instance_id, and route to the chatbot service.
+    Recebe mensagens do WhatsApp via Evolution API.
+    ATENÇÃO: este endpoint deve ser registrado em /api (não em /api/restaurants).
+    No main.py: app.include_router(whatsapp_router, prefix="/api")
     """
     try:
         payload = await request.json()
@@ -113,22 +104,22 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
 
     logger.debug(f"WhatsApp webhook payload: {payload}")
 
-    # Evolution API payload structure
     instance_id = payload.get("instance") or payload.get("instanceName")
     data = payload.get("data", {})
 
-    # Guard: only process text messages
     message_type = data.get("messageType") or data.get("type")
     if message_type not in ("conversation", "extendedTextMessage", "text"):
         return {"status": "ignored", "reason": "non-text message type"}
 
-    # Extract sender phone
     key = data.get("key", {})
-    sender_phone: str | None = key.get("remoteJid", "").replace("@s.whatsapp.net", "").replace("@c.us", "")
+    sender_phone: str | None = (
+        key.get("remoteJid", "")
+        .replace("@s.whatsapp.net", "")
+        .replace("@c.us", "")
+    )
     if not sender_phone:
         return {"status": "ignored", "reason": "no sender phone"}
 
-    # Extract message text
     message = (
         data.get("message", {}).get("conversation")
         or data.get("message", {}).get("extendedTextMessage", {}).get("text")
@@ -138,7 +129,6 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     if not message:
         return {"status": "ignored", "reason": "empty message"}
 
-    # Resolve restaurant by evolution instance ID
     restaurant = db.query(Restaurant).filter(
         Restaurant.evolution_instance_id == instance_id,
         Restaurant.is_active == True,
@@ -148,7 +138,6 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
         logger.warning(f"No restaurant found for Evolution instance: {instance_id}")
         return {"status": "ignored", "reason": "unknown instance"}
 
-    # Route to chatbot
     svc = ChatbotService(db)
     result = await svc.process_message(
         restaurant_id=restaurant.id,
@@ -156,7 +145,6 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
         user_message=message,
     )
 
-    # Send reply back via WhatsApp
     from app.services.whatsapp_service import send_whatsapp_message
     await send_whatsapp_message(sender_phone, result["reply"], instance_id)
 
