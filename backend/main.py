@@ -89,11 +89,18 @@ def get_restaurant_public(
     restaurant_id: str,
     db: Session = Depends(get_db),
 ):
-    from uuid import UUID
-    from sqlalchemy import or_
-    r = db.query(Restaurant).filter(
-        or_(Restaurant.slug == restaurant_id, Restaurant.id == restaurant_id)
-    ).first()
+    # Busca por slug primeiro
+    r = db.query(Restaurant).filter(Restaurant.slug == restaurant_id).first()
+
+    # Se não achou por slug, tenta por UUID
+    if not r:
+        try:
+            from uuid import UUID
+            uid = UUID(restaurant_id)
+            r = db.query(Restaurant).filter(Restaurant.id == uid).first()
+        except ValueError:
+            pass
+
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
     return r.to_dict()
