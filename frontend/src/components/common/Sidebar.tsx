@@ -36,10 +36,10 @@ export function Sidebar({ items, title, open, onClose }: SidebarProps) {
         <div className="border-t border-white/10 p-4">
           <div className="mb-3 flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-500 text-sm font-semibold text-ink-900">
-              {user ? initials(user.name) : '–'}
+              {user ? initials(user.full_name) : '–'}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-sand-50">{user?.name}</p>
+              <p className="truncate text-sm font-medium text-sand-50">{user?.full_name}</p>
               <p className="truncate text-xs text-sand-300/70">{user?.email}</p>
             </div>
           </div>
