@@ -55,6 +55,23 @@ app.include_router(chatbot.router, prefix="/api/chatbot")
 app.include_router(whatsapp.router, prefix="/api/whatsapp")
 
 
+
+# ──────────────────────────────────────────────
+# Public restaurants listing (used by frontend)
+# ──────────────────────────────────────────────
+from fastapi import Query as _Query
+from app.utils.db import get_db as _get_db
+from app.models.restaurant import Restaurant as _Restaurant
+from sqlalchemy.orm import Session as _Session
+
+@app.get("/api/restaurants", tags=["Public"])
+def list_restaurants_public(
+    limit: int = _Query(50, ge=1, le=100),
+    db: _Session = Depends(_get_db),
+):
+    items = db.query(_Restaurant).filter(_Restaurant.is_active == True).limit(limit).all()
+    return {"items": [r.to_dict() for r in items], "total": len(items)}
+
 # ──────────────────────────────────────────────
 # Health
 # ──────────────────────────────────────────────
