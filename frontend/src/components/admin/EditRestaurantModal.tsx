@@ -13,13 +13,13 @@ interface EditRestaurantModalProps {
 
 export function EditRestaurantModal({ restaurant, onClose, onUpdated }: EditRestaurantModalProps) {
   const [formData, setFormData] = useState({
-    name: restaurant.name,
-    slug: restaurant.slug,
-    city: restaurant.city,
-    address: restaurant.address || '',
-    phone: restaurant.phone || '',
-    email: restaurant.email || '',
-    description: restaurant.description || '',
+    name: restaurant?.name || '',
+    slug: restaurant?.slug || '',
+    city: restaurant?.city || '',
+    address: restaurant?.address || '',
+    phone: restaurant?.phone || '',
+    email: restaurant?.email || '',
+    description: restaurant?.description || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
