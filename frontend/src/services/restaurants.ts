@@ -36,6 +36,10 @@ export const restaurantsService = {
     return data
   },
 
+  async deleteRestaurant(id: string): Promise<void> {
+    await api.delete(`/restaurants/${id}`)
+  },
+
   async setStatus(id: string, status: Restaurant['status']): Promise<Restaurant> {
     const { data } = await api.patch<Restaurant>(`/restaurants/${id}/status`, { status })
     return data
