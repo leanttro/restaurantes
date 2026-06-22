@@ -18,8 +18,6 @@ export function EditRestaurantModal({ restaurant, onClose, onUpdated }: EditRest
     city: restaurant?.city || '',
     address: restaurant?.address || '',
     phone: restaurant?.phone || '',
-    email: restaurant?.email || '',
-    description: restaurant?.description || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -115,28 +113,6 @@ export function EditRestaurantModal({ restaurant, onClose, onUpdated }: EditRest
               name="address"
               value={formData.address}
               onChange={handleChange}
-              className="input-field"
-            />
-          </div>
-
-          <div>
-            <label className="label-text">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="input-field"
-            />
-          </div>
-
-          <div>
-            <label className="label-text">Descrição</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
               className="input-field"
             />
           </div>
