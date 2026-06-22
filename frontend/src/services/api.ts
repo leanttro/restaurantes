@@ -3,7 +3,13 @@ import { storage } from '@/utils/storage'
 import { ApiError, ApiErrorBody } from '@/types/api'
 import { AuthTokens } from '@/types'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+// Determina a URL da API
+let BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+
+// Em produção (HTTPS), converte HTTP pra HTTPS pra evitar Mixed Content
+if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+  BASE_URL = BASE_URL.replace('http://', 'https://')
+}
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
