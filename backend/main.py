@@ -1,10 +1,8 @@
 """
 Reserva de Restaurantes API — FastAPI entry point.
-
-Docs available at /docs (Swagger) and /redoc (ReDoc).
 """
 import logging
-from fastapi import FastAPI, Depends, Query, HTTPException, status
+from fastapi import FastAPI, Depends, Query, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -14,36 +12,21 @@ from app.utils.db import get_db
 from app.utils.security import require_role, get_current_user
 from app.utils.constants import UserRole
 from app.models.restaurant import Restaurant
-from app.models.user import User
 from app.schemas.restaurant import RestaurantCreate
 
-# ──────────────────────────────────────────────
-# Logging
-# ──────────────────────────────────────────────
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────
-# App
-# ──────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description=(
-        "API para plataforma SaaS de reservas de restaurantes com chatbot WhatsApp.\n\n"
-        "**Roles:** `super_admin` → gerencia tudo | `restaurant_admin` → gerencia seu restaurante | `client` → faz reservas.\n\n"
-        "Autenticação via **Bearer JWT**."
-    ),
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ──────────────────────────────────────────────
-# Middleware
-# ──────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -52,25 +35,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ──────────────────────────────────────────────
-# Routers
-# ORDEM IMPORTA: routers com paths específicos ANTES dos genéricos
-# ──────────────────────────────────────────────
+# ── Routers ────────────────────────────────────────────────
 app.include_router(auth.router,         prefix="/api/auth")
 app.include_router(admin.router,        prefix="/api/admin")
 app.include_router(reservations.router, prefix="/api/reservations")
+app.include_router(restaurants.router,  prefix="/api/restaurants")
+app.include_router(whatsapp.router,     prefix="/api/restaurants")
 
-# Routers de restaurante — registrados ANTES das rotas genéricas definidas
-# inline abaixo, para evitar que /{restaurant_id} engula os sub-paths
-# (ex: /{id}/chatbot/settings, /{id}/whatsapp/status)
-app.include_router(restaurants.router, prefix="/api/restaurants")
-app.include_router(chatbot.router,     prefix="/api/restaurants")
-app.include_router(whatsapp.router,    prefix="/api/restaurants")
+# CORRIGIDO: chatbot montado com {restaurant_id} no prefixo
+# Isso garante que /chatbot/settings NÃO conflita com /{restaurant_id} inline
+app.include_router(
+    chatbot.router,
+    prefix="/api/restaurants/{restaurant_id}",
+)
 
+# ── Rotas inline — DEPOIS dos routers ─────────────────────
 
-# ──────────────────────────────────────────────
-# Public restaurants listing (usado pelo frontend)
-# ──────────────────────────────────────────────
 @app.get("/api/restaurants", tags=["Public"])
 def list_restaurants_public(
     limit: int = Query(50, ge=1, le=100),
@@ -89,7 +69,6 @@ def list_restaurants_public(
     return {"items": [r.to_dict() for r in items], "total": len(items)}
 
 
-# CORRIGIDO: analytics liberado para super_admin E restaurant_admin
 @app.get("/api/restaurants/{restaurant_id}/analytics", tags=["Restaurants"])
 def get_restaurant_analytics(
     restaurant_id: str,
@@ -108,12 +87,12 @@ def get_restaurant_analytics(
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
 
-    # super_admin vê tudo; restaurant_admin só vê o próprio restaurante
     is_super = current_user.role == UserRole.SUPER_ADMIN
     is_owner = str(r.owner_id) == str(current_user.id)
     if not (is_super or is_owner):
         raise HTTPException(status_code=403, detail="Acesso negado")
 
+    from app.models.reservation import Reservation
     total = db.query(Reservation).filter(Reservation.restaurant_id == r.id).count()
     confirmed = db.query(Reservation).filter(
         Reservation.restaurant_id == r.id,
@@ -126,46 +105,18 @@ def get_restaurant_analytics(
     }
 
 
-# CORRIGIDO: rota genérica por slug/UUID — deve ficar DEPOIS de /analytics
-# para não engolir sub-paths registrados via router acima
-@app.get("/api/restaurants/{restaurant_id}", tags=["Public"])
-def get_restaurant_public(
-    restaurant_id: str,
-    db: Session = Depends(get_db),
-):
-    # Busca por slug primeiro
-    r = db.query(Restaurant).filter(Restaurant.slug == restaurant_id).first()
-
-    # Se não achou por slug, tenta por UUID
-    if not r:
-        try:
-            from uuid import UUID
-            uid = UUID(restaurant_id)
-            r = db.query(Restaurant).filter(Restaurant.id == uid).first()
-        except ValueError:
-            pass
-
-    if not r:
-        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    return r.to_dict()
-
-
 @app.post("/api/restaurants", tags=["Public"], status_code=201)
 def create_restaurant_public(
     data: RestaurantCreate,
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
-    """Cria um novo restaurante. Apenas super_admin. O próprio usuário logado vira dono."""
     if db.query(Restaurant).filter(Restaurant.slug == data.slug).first():
         raise HTTPException(status_code=409, detail="Slug já está em uso")
-
-    owner = current_user
-    restaurant = Restaurant(**data.model_dump(), owner_id=owner.id)
+    restaurant = Restaurant(**data.model_dump(), owner_id=current_user.id)
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
-    logger.info(f"Restaurante criado: {restaurant.name}")
     return restaurant.to_dict()
 
 
@@ -180,7 +131,6 @@ def set_restaurant_status(
     db: Session = Depends(get_db),
     current_user=Depends(require_role(UserRole.SUPER_ADMIN)),
 ):
-    """Ativa ou desativa um restaurante. Apenas super_admin."""
     from uuid import UUID
     r = db.query(Restaurant).filter(Restaurant.id == UUID(restaurant_id)).first()
     if not r:
@@ -191,9 +141,23 @@ def set_restaurant_status(
     return r.to_dict()
 
 
-# ──────────────────────────────────────────────
-# Health
-# ──────────────────────────────────────────────
+# Rota genérica por slug/UUID — ÚLTIMA, para não engolir sub-paths
+@app.get("/api/restaurants/{restaurant_id}", tags=["Public"])
+def get_restaurant_public(restaurant_id: str, db: Session = Depends(get_db)):
+    r = db.query(Restaurant).filter(Restaurant.slug == restaurant_id).first()
+    if not r:
+        try:
+            from uuid import UUID
+            r = db.query(Restaurant).filter(Restaurant.id == UUID(restaurant_id)).first()
+        except ValueError:
+            pass
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+    return r.to_dict()
+
+
+# ── Health ─────────────────────────────────────────────────
+
 @app.get("/", tags=["Health"])
 def root():
     return {"message": f"{settings.APP_NAME} v{settings.APP_VERSION}", "status": "ok"}
@@ -211,9 +175,6 @@ def health():
     return {"api": "ok", "database": "ok" if db_ok else "error"}
 
 
-# ──────────────────────────────────────────────
-# Dev server
-# ──────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
