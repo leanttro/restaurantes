@@ -26,7 +26,7 @@ export default function DashboardHomePage() {
 
   return (
     <div className="space-y-6">
-      <div><h1 className="font-display text-2xl font-semibold text-ink-900">Olá, {user?.name?.split(' ')[0]} 👋</h1></div>
+      <div><h1 className="font-display text-2xl font-semibold text-ink-900">Olá, {user?.full_name?.split(' ')[0]} 👋</h1></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card p-5"><div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-bordeaux-600/10 text-bordeaux-600"><CalendarCheck2 size={16} /></div><p className="text-2xl font-semibold">{summary?.total_reservations ?? 0}</p><p className="text-sm text-ink-600">Total de reservas</p></div>
         <div className="card p-5"><div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-sage-500/10 text-sage-600"><CalendarCheck2 size={16} /></div><p className="text-2xl font-semibold">{summary?.confirmed_reservations ?? 0}</p><p className="text-sm text-ink-600">Confirmadas</p></div>
