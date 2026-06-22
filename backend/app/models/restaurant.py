@@ -44,8 +44,7 @@ class Restaurant(Base):
     chatbot_setting = relationship("ChatbotSetting", back_populates="restaurant", uselist=False)
     whatsapp_templates = relationship("WhatsappTemplate", back_populates="restaurant", cascade="all, delete-orphan")
     images = relationship("RestaurantImage", back_populates="restaurant", cascade="all, delete-orphan")
-    scheduled_jobs = relationship("ScheduledJob", back_populates="restaurant")
-    analytics = relationship("ReservationAnalytics", back_populates="restaurant", cascade="all, delete-orphan")
+    analytics = relationship("ReservationAnalytics", back_populates="restaurant", cascade="all, delete-orphan") = relationship("ReservationAnalytics", back_populates="restaurant", cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
