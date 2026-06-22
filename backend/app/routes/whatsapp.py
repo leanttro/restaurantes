@@ -83,18 +83,12 @@ def create_whatsapp_template(
 @router.post("/{restaurant_id}/whatsapp/connect")
 def connect_whatsapp(
     restaurant_id: UUID,
-    data: dict,
     db: Session = Depends(get_db),
 ):
     """Connect WhatsApp to a restaurant."""
     r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado")
-    
-    # Atualiza o instance_id
-    r.evolution_instance_id = data.get("instance_id")
-    db.commit()
-    db.refresh(r)
     
     return {
         "status": "connected",
