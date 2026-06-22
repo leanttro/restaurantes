@@ -10,7 +10,7 @@ from app.services.chatbot_service import ChatbotService
 router = APIRouter(tags=["Chatbot"])
 
 
-@router.get("/{restaurant_id}/settings")
+@router.get("/{restaurant_id}/chatbot/settings")
 def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
     """Get chatbot settings for a restaurant."""
     from app.models.restaurant import Restaurant
@@ -29,7 +29,7 @@ def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/{restaurant_id}/settings")
+@router.post("/{restaurant_id}/chatbot/settings")
 def update_chatbot_settings(
     restaurant_id: UUID,
     data: dict,
