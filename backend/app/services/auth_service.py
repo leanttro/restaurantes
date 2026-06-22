@@ -31,8 +31,8 @@ class AuthService:
                 detail="Cannot self-register as super_admin",
             )
 
-        # Cria restaurante se vier restaurant_name
-        restaurant = None
+        # Valida slug antes de criar qualquer coisa
+        slug = None
         if data.restaurant_name:
             slug = re.sub(r'[^a-z0-9]+', '-', data.restaurant_name.lower()).strip('-')
             if self.db.query(Restaurant).filter(Restaurant.slug == slug).first():
@@ -40,34 +40,36 @@ class AuthService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Slug '{slug}' já está em uso. Escolha outro nome para o restaurante.",
                 )
-            restaurant = Restaurant(
-                name=data.restaurant_name,
-                slug=slug,
-                is_active=True,
-            )
-            self.db.add(restaurant)
-            self.db.flush()  # gera o ID sem commitar ainda
 
+        # Cria o usuário primeiro (sem restaurant_id ainda)
         user = User(
             email=data.email,
             password_hash=hash_password(data.password),
             full_name=data.full_name,
             phone=data.phone,
             role=data.role,
-            restaurant_id=restaurant.id if restaurant else data.restaurant_id,
+            restaurant_id=data.restaurant_id,
         )
         self.db.add(user)
         self.db.flush()  # gera o ID do user
 
-        # Vincula o dono ao restaurante
-        if restaurant:
-            restaurant.owner_id = user.id
+        # Agora cria o restaurante com owner_id já disponível
+        if slug:
+            restaurant = Restaurant(
+                name=data.restaurant_name,
+                slug=slug,
+                owner_id=user.id,
+                is_active=True,
+            )
+            self.db.add(restaurant)
+            self.db.flush()  # gera o ID do restaurante
+            user.restaurant_id = restaurant.id  # vincula de volta ao user
 
         self.db.commit()
         self.db.refresh(user)
         logger.info(f"New user registered: {user.email} ({user.role})")
-        if restaurant:
-            logger.info(f"Restaurant created: {restaurant.name} (slug={restaurant.slug})")
+        if slug:
+            logger.info(f"Restaurant created: {data.restaurant_name} (slug={slug})")
         return user
 
     def login(self, email: str, password: str) -> dict:
