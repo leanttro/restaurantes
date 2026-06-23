@@ -22,8 +22,13 @@ export function WhatsappTemplates({ restaurantId }: { restaurantId: string }) {
 
   useEffect(() => {
     whatsappService.getTemplates(restaurantId).then((data: WhatsappTemplate[]) => {
-      const map = { confirmation: '', reminder: '', cancellation: '' }
-      data.forEach((t) => { map[t.type] = t.content })
+      const map: Record<WhatsappTemplateType, string> = { confirmation: '', reminder: '', cancellation: '' }
+      data.forEach((t) => {
+        // suporta tanto template_type/message_body (backend real) quanto type/content (legado)
+        const type = (t.template_type ?? (t as unknown as Record<string, unknown>)['type']) as WhatsappTemplateType
+        const body = t.message_body ?? (t as unknown as Record<string, unknown>)['content'] as string ?? ''
+        if (type && type in map) map[type] = body
+      })
       setTemplates(map)
     }).catch((e) => setError(e instanceof ApiError ? e.message : 'Erro.')).finally(() => setLoading(false))
   }, [restaurantId])
