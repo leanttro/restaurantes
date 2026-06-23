@@ -37,7 +37,6 @@ const T: Record<Lang, Record<string, string>> = {
   },
 }
 
-// day_of_week do JS: 0=Domingo, 1=Segunda... — converte pro padrão do backend (0=Segunda)
 function todayDayOfWeek() {
   const js = new Date().getDay()
   return js === 0 ? 6 : js - 1
@@ -90,7 +89,6 @@ export default function RestaurantPage() {
       </div>
     )
 
-  // Horários para o mini-calendário semanal
   const hoursByDay: Record<number, AvailableHour> = {}
   hours.forEach(h => { hoursByDay[h.day_of_week] = h })
   const weekDays = [0, 1, 2, 3, 4, 5, 6]
@@ -99,7 +97,7 @@ export default function RestaurantPage() {
     <div className="min-h-screen bg-sand-50">
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <div className="relative bg-bordeaux-700 pb-24 pt-10 overflow-hidden">
-        {/* Foto de fundo transparente (cover_image_url usada duas vezes) */}
+        {/* Foto de fundo transparente */}
         {restaurant.cover_image_url && (
           <img
             src={restaurant.cover_image_url}
@@ -127,36 +125,35 @@ export default function RestaurantPage() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex items-end gap-5">
+          <div className="flex flex-col items-center text-center gap-4">
             {/* Logo */}
             {restaurant.logo_url && (
               <img
                 src={restaurant.logo_url}
                 alt="logo"
-                className="h-20 w-20 rounded-2xl object-cover shadow-lg border-2 border-white/20 shrink-0"
+                className="h-20 w-20 rounded-2xl object-cover shadow-lg border-2 border-white/20"
               />
             )}
-            <div>
+            <div className="max-w-2xl">
               <h1 className="font-display text-4xl font-bold text-white">{restaurant.name}</h1>
               {(restaurant.cuisine_type || restaurant.city) && (
-                <p className="mt-1 text-sm font-medium text-gold-400">
+                <p className="mt-2 text-sm font-medium text-gold-400">
                   {[restaurant.cuisine_type, restaurant.city].filter(Boolean).join(' · ')}
                 </p>
               )}
               {restaurant.description && (
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-sand-100/80">{restaurant.description}</p>
+                <p className="mt-2 text-sm leading-relaxed text-sand-100/80">{restaurant.description}</p>
               )}
             </div>
           </div>
 
-          {/* Foto destaque do local (cover_image_url em destaque) */}
+          {/* Foto destaque do local - SEM CORTE */}
           {restaurant.cover_image_url && (
-            <div className="mt-5 overflow-hidden rounded-2xl shadow-lg" style={{ maxHeight: 220 }}>
+            <div className="mt-6 overflow-hidden rounded-2xl shadow-lg">
               <img
                 src={restaurant.cover_image_url}
                 alt={restaurant.name}
-                className="w-full object-cover"
-                style={{ maxHeight: 220 }}
+                className="w-full object-contain"
               />
             </div>
           )}
@@ -275,7 +272,7 @@ export default function RestaurantPage() {
                 href={restaurant.banner1_link_url || '#'}
                 target={restaurant.banner1_link_url ? '_blank' : undefined}
                 rel="noopener noreferrer"
-                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90"
+                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90 cursor-pointer"
               >
                 <img
                   src={restaurant.banner1_image_url}
@@ -290,7 +287,7 @@ export default function RestaurantPage() {
                 href={restaurant.banner2_link_url || '#'}
                 target={restaurant.banner2_link_url ? '_blank' : undefined}
                 rel="noopener noreferrer"
-                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90"
+                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90 cursor-pointer"
               >
                 <img
                   src={restaurant.banner2_image_url}
