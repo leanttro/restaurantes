@@ -1,6 +1,6 @@
 """Pydantic schemas for Restaurant endpoints."""
 from uuid import UUID
-from datetime import datetime, time
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
@@ -9,10 +9,15 @@ class RestaurantCreate(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
+    cuisine_type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
+    max_party_size: Optional[int] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     evolution_instance_id: Optional[str] = None
@@ -21,10 +26,15 @@ class RestaurantCreate(BaseModel):
 class RestaurantUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    cuisine_type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
+    max_party_size: Optional[int] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     evolution_instance_id: Optional[str] = None
@@ -36,10 +46,15 @@ class RestaurantResponse(BaseModel):
     name: str
     slug: str
     description: Optional[str]
+    cuisine_type: Optional[str]
     phone: Optional[str]
     email: Optional[str]
     address: Optional[str]
     city: Optional[str]
+    whatsapp_number: Optional[str]
+    cover_image_url: Optional[str]
+    logo_url: Optional[str]
+    max_party_size: Optional[int]
     latitude: Optional[float]
     longitude: Optional[float]
     evolution_instance_id: Optional[str]
@@ -50,9 +65,9 @@ class RestaurantResponse(BaseModel):
 
 
 class AvailableHourCreate(BaseModel):
-    day_of_week: int  # 0-6
-    start_time: str   # "HH:MM"
-    end_time: str     # "HH:MM"
+    day_of_week: int   # 0=Segunda … 6=Domingo
+    start_time: str    # "HH:MM"
+    end_time: str      # "HH:MM"
     interval_minutes: int = 30
     max_capacity: int
     is_active: bool = True
@@ -93,7 +108,6 @@ class PromotionResponse(BaseModel):
     valid_until: datetime
     conditions: dict
     is_active: bool
-    is_currently_valid: bool
 
     model_config = {"from_attributes": True}
 
