@@ -6,6 +6,36 @@ import { ChatbotWidget } from '@/components/reservation/ChatbotWidget'
 import { ReservationForm } from '@/components/reservation/ReservationForm'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { Restaurant, Reservation } from '@/types'
+import { Globe, MapPin, Phone, Users } from 'lucide-react'
+
+type Lang = 'pt' | 'en' | 'es'
+
+const T: Record<Lang, Record<string, string>> = {
+  pt: {
+    notFound: 'Restaurante não encontrado.',
+    makeReservation: 'Faça sua reserva',
+    useForm: 'Prefiro preencher um formulário',
+    backToAI: '← Usar assistente de IA',
+    address: 'Endereço', phone: 'Telefone', maxParty: 'Máx. por mesa',
+    people: 'pessoas', info: 'Informações',
+  },
+  en: {
+    notFound: 'Restaurant not found.',
+    makeReservation: 'Make a reservation',
+    useForm: 'I prefer to fill a form',
+    backToAI: '← Use AI assistant',
+    address: 'Address', phone: 'Phone', maxParty: 'Max. party size',
+    people: 'people', info: 'Information',
+  },
+  es: {
+    notFound: 'Restaurante no encontrado.',
+    makeReservation: 'Haz tu reserva',
+    useForm: 'Prefiero rellenar un formulario',
+    backToAI: '← Usar asistente de IA',
+    address: 'Dirección', phone: 'Teléfono', maxParty: 'Máx. por mesa',
+    people: 'personas', info: 'Información',
+  },
+}
 
 export default function RestaurantPage() {
   const { restaurant: slug } = useParams<{ restaurant: string }>()
@@ -13,46 +43,178 @@ export default function RestaurantPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [loading, setLoading] = useState(true)
   const [useForm, setUseForm] = useState(false)
+  const [lang, setLang] = useState<Lang>('pt')
 
   useEffect(() => {
-    restaurantsService.getRestaurant(slug).then(setRestaurant).finally(() => setLoading(false))
+    const bl = navigator.language.slice(0, 2) as Lang
+    if (['pt', 'en', 'es'].includes(bl)) setLang(bl)
+  }, [])
+
+  useEffect(() => {
+    restaurantsService
+      .getRestaurant(slug)
+      .then(setRestaurant)
+      .finally(() => setLoading(false))
   }, [slug])
 
   function handleComplete(reservation: Reservation) {
-    router.push(`/success?code=${reservation.confirmation_code}`)
+    // Tenta usar o confirmation_code se vier, senão usa o id
+    const code = reservation.confirmation_code ?? reservation.id
+    router.push(`/success?code=${code}`)
   }
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><LoadingSpinner size="lg" label="Carregando…" /></div>
-  if (!restaurant) return <div className="flex min-h-screen items-center justify-center"><p className="text-ink-600">Restaurante não encontrado.</p></div>
+  const t = T[lang]
+
+  if (loading)
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-sand-50">
+        <LoadingSpinner size="lg" label="" />
+      </div>
+    )
+
+  if (!restaurant)
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-sand-50">
+        <p className="text-ink-600">{t.notFound}</p>
+      </div>
+    )
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-ink-900">{restaurant.name}</h1>
-        {restaurant.cuisine_type && <p className="text-gold-600">{restaurant.cuisine_type} · {restaurant.city}</p>}
-        {restaurant.description && <p className="mt-3 text-ink-600">{restaurant.description}</p>}
-      </div>
-      <div className="grid gap-8 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-4 font-display text-xl font-semibold text-ink-900">Faça sua reserva</h2>
-          {!useForm ? (
-            <ChatbotWidget restaurantId={restaurant.id} restaurantName={restaurant.name} onReservationComplete={handleComplete} onUseFormInstead={() => setUseForm(true)} />
-          ) : (
-            <>
-              <ReservationForm restaurant={restaurant} onSuccess={handleComplete} />
-              <button onClick={() => setUseForm(false)} className="mt-3 text-xs text-ink-600 hover:text-bordeaux-600">← Usar assistente de IA</button>
-            </>
+    <div className="min-h-screen bg-sand-50">
+      {/* ── Hero ─────────────────────────────────────────────────── */}
+      <div className="relative bg-bordeaux-700 pb-24 pt-10">
+        {restaurant.cover_image_url && (
+          <img
+            src={restaurant.cover_image_url}
+            alt={restaurant.name}
+            className="absolute inset-0 h-full w-full object-cover opacity-20"
+          />
+        )}
+
+        {/* Language switcher */}
+        <div className="relative z-10 mx-auto flex max-w-4xl justify-end px-4 pb-4 sm:px-6">
+          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-1 py-1">
+            <Globe size={13} className="ml-2 text-sand-100/60" />
+            {(['pt', 'en', 'es'] as Lang[]).map((l) => (
+              <button
+                key={l}
+                onClick={() => setLang(l)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  lang === l
+                    ? 'bg-white text-bordeaux-700'
+                    : 'text-sand-100/70 hover:text-white'
+                }`}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
+          {restaurant.logo_url && (
+            <img
+              src={restaurant.logo_url}
+              alt="logo"
+              className="mb-4 h-16 w-16 rounded-xl object-cover shadow-lg"
+            />
+          )}
+          <h1 className="font-display text-4xl font-bold text-white">{restaurant.name}</h1>
+          {(restaurant.cuisine_type || restaurant.city) && (
+            <p className="mt-1 text-sm font-medium text-gold-400">
+              {[restaurant.cuisine_type, restaurant.city].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {restaurant.description && (
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-sand-100/80">
+              {restaurant.description}
+            </p>
           )}
         </div>
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h3 className="mb-3 font-display text-lg font-semibold">Informações</h3>
-            <dl className="space-y-2 text-sm">
-              <div><dt className="font-medium text-ink-900">Endereço</dt><dd className="text-ink-600">{restaurant.address}</dd></div>
-              <div><dt className="font-medium text-ink-900">Telefone</dt><dd className="text-ink-600">{restaurant.phone}</dd></div>
-              <div><dt className="font-medium text-ink-900">Máx. por mesa</dt><dd className="text-ink-600">{restaurant.max_party_size} pessoas</dd></div>
-            </dl>
+      </div>
+
+      {/* ── Main — overlaps hero ──────────────────────────────────── */}
+      <div className="relative z-10 mx-auto -mt-16 max-w-4xl px-4 pb-16 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-5">
+
+          {/* Reservation panel (3 cols) */}
+          <div className="lg:col-span-3">
+            <div className="overflow-hidden rounded-xl bg-white shadow-ticket">
+              <div className="border-b border-ink-900/8 px-5 py-4">
+                <h2 className="font-display text-xl font-semibold text-ink-900">
+                  {t.makeReservation}
+                </h2>
+              </div>
+              <div className="p-5">
+                {!useForm ? (
+                  <ChatbotWidget
+                    restaurantId={restaurant.id}
+                    restaurantName={restaurant.name}
+                    lang={lang}
+                    onReservationComplete={handleComplete}
+                    onUseFormInstead={() => setUseForm(true)}
+                  />
+                ) : (
+                  <>
+                    <ReservationForm
+                      restaurant={restaurant}
+                      onSuccess={handleComplete}
+                      lang={lang}
+                    />
+                    <button
+                      onClick={() => setUseForm(false)}
+                      className="mt-3 text-xs text-ink-600 hover:text-bordeaux-600"
+                    >
+                      {t.backToAI}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Info panel (2 cols) */}
+          <div className="space-y-4 lg:col-span-2">
+            <div className="rounded-xl bg-white p-5 shadow-ticket">
+              <h3 className="mb-4 font-display text-lg font-semibold text-ink-900">{t.info}</h3>
+              <dl className="space-y-3 text-sm">
+                {restaurant.address && (
+                  <div className="flex gap-3">
+                    <MapPin size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
+                    <div>
+                      <dt className="font-medium text-ink-900">{t.address}</dt>
+                      <dd className="text-ink-600">{restaurant.address}</dd>
+                    </div>
+                  </div>
+                )}
+                {restaurant.phone && (
+                  <div className="flex gap-3">
+                    <Phone size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
+                    <div>
+                      <dt className="font-medium text-ink-900">{t.phone}</dt>
+                      <dd className="text-ink-600">
+                        <a href={`tel:${restaurant.phone}`} className="hover:text-bordeaux-600">
+                          {restaurant.phone}
+                        </a>
+                      </dd>
+                    </div>
+                  </div>
+                )}
+                {restaurant.max_party_size && (
+                  <div className="flex gap-3">
+                    <Users size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
+                    <div>
+                      <dt className="font-medium text-ink-900">{t.maxParty}</dt>
+                      <dd className="text-ink-600">
+                        {restaurant.max_party_size} {t.people}
+                      </dd>
+                    </div>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
