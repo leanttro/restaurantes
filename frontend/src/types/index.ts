@@ -18,6 +18,8 @@ export interface AuthTokens {
 export interface LoginPayload { email: string; password: string }
 export interface RegisterPayload { full_name: string; email: string; password: string; role: UserRole; restaurant_name?: string }
 
+export type RestaurantStatus = 'active' | 'inactive' | 'pending'
+
 export interface Restaurant {
   id: string
   slug: string
