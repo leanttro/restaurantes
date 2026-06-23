@@ -127,6 +127,10 @@ class RestaurantUpdate(BaseModel):
     cover_image_url: str | None = None
     logo_url: str | None = None
     max_party_size: int | None = None
+    banner1_image_url: str | None = None
+    banner1_link_url: str | None = None
+    banner2_image_url: str | None = None
+    banner2_link_url: str | None = None
 
 
 @app.put("/api/restaurants/{restaurant_id}", tags=["Restaurants"])
