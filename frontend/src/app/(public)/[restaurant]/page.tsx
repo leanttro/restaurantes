@@ -5,8 +5,8 @@ import { restaurantsService } from '@/services/restaurants'
 import { ChatbotWidget } from '@/components/reservation/ChatbotWidget'
 import { ReservationForm } from '@/components/reservation/ReservationForm'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
-import { Restaurant, Reservation } from '@/types'
-import { Globe, MapPin, Phone, Users } from 'lucide-react'
+import { Restaurant, Reservation, AvailableHour, DAY_LABELS } from '@/types'
+import { Clock, Globe, MapPin, Phone, Users } from 'lucide-react'
 
 type Lang = 'pt' | 'en' | 'es'
 
@@ -17,7 +17,7 @@ const T: Record<Lang, Record<string, string>> = {
     useForm: 'Prefiro preencher um formulário',
     backToAI: '← Usar assistente de IA',
     address: 'Endereço', phone: 'Telefone', maxParty: 'Máx. por mesa',
-    people: 'pessoas', info: 'Informações',
+    people: 'pessoas', info: 'Informações', hours: 'Horários',
   },
   en: {
     notFound: 'Restaurant not found.',
@@ -25,7 +25,7 @@ const T: Record<Lang, Record<string, string>> = {
     useForm: 'I prefer to fill a form',
     backToAI: '← Use AI assistant',
     address: 'Address', phone: 'Phone', maxParty: 'Max. party size',
-    people: 'people', info: 'Information',
+    people: 'people', info: 'Information', hours: 'Opening hours',
   },
   es: {
     notFound: 'Restaurante no encontrado.',
@@ -33,14 +33,21 @@ const T: Record<Lang, Record<string, string>> = {
     useForm: 'Prefiero rellenar un formulario',
     backToAI: '← Usar asistente de IA',
     address: 'Dirección', phone: 'Teléfono', maxParty: 'Máx. por mesa',
-    people: 'personas', info: 'Información',
+    people: 'personas', info: 'Información', hours: 'Horarios',
   },
+}
+
+// day_of_week do JS: 0=Domingo, 1=Segunda... — converte pro padrão do backend (0=Segunda)
+function todayDayOfWeek() {
+  const js = new Date().getDay() // 0=Dom,1=Seg...
+  return js === 0 ? 6 : js - 1  // converte: Dom→6, Seg→0, ...
 }
 
 export default function RestaurantPage() {
   const { restaurant: slug } = useParams<{ restaurant: string }>()
   const router = useRouter()
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
+  const [hours, setHours] = useState<AvailableHour[]>([])
   const [loading, setLoading] = useState(true)
   const [useForm, setUseForm] = useState(false)
   const [lang, setLang] = useState<Lang>('pt')
@@ -53,17 +60,21 @@ export default function RestaurantPage() {
   useEffect(() => {
     restaurantsService
       .getRestaurant(slug)
-      .then(setRestaurant)
+      .then((r) => {
+        setRestaurant(r)
+        return restaurantsService.getHours(r.id)
+      })
+      .then((h) => setHours(h.filter((x) => x.is_active).sort((a, b) => a.day_of_week - b.day_of_week)))
       .finally(() => setLoading(false))
   }, [slug])
 
   function handleComplete(reservation: Reservation) {
-    // Tenta usar o confirmation_code se vier, senão usa o id
     const code = reservation.confirmation_code ?? reservation.id
     router.push(`/success?code=${code}`)
   }
 
   const t = T[lang]
+  const today = todayDayOfWeek()
 
   if (loading)
     return (
@@ -100,9 +111,7 @@ export default function RestaurantPage() {
                 key={l}
                 onClick={() => setLang(l)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                  lang === l
-                    ? 'bg-white text-bordeaux-700'
-                    : 'text-sand-100/70 hover:text-white'
+                  lang === l ? 'bg-white text-bordeaux-700' : 'text-sand-100/70 hover:text-white'
                 }`}
               >
                 {l.toUpperCase()}
@@ -113,11 +122,7 @@ export default function RestaurantPage() {
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
           {restaurant.logo_url && (
-            <img
-              src={restaurant.logo_url}
-              alt="logo"
-              className="mb-4 h-16 w-16 rounded-xl object-cover shadow-lg"
-            />
+            <img src={restaurant.logo_url} alt="logo" className="mb-4 h-16 w-16 rounded-xl object-cover shadow-lg" />
           )}
           <h1 className="font-display text-4xl font-bold text-white">{restaurant.name}</h1>
           {(restaurant.cuisine_type || restaurant.city) && (
@@ -126,24 +131,20 @@ export default function RestaurantPage() {
             </p>
           )}
           {restaurant.description && (
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-sand-100/80">
-              {restaurant.description}
-            </p>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-sand-100/80">{restaurant.description}</p>
           )}
         </div>
       </div>
 
-      {/* ── Main — overlaps hero ──────────────────────────────────── */}
+      {/* ── Main ─────────────────────────────────────────────────── */}
       <div className="relative z-10 mx-auto -mt-16 max-w-4xl px-4 pb-16 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-5">
 
-          {/* Reservation panel (3 cols) */}
+          {/* Reservation panel */}
           <div className="lg:col-span-3">
             <div className="overflow-hidden rounded-xl bg-white shadow-ticket">
               <div className="border-b border-ink-900/8 px-5 py-4">
-                <h2 className="font-display text-xl font-semibold text-ink-900">
-                  {t.makeReservation}
-                </h2>
+                <h2 className="font-display text-xl font-semibold text-ink-900">{t.makeReservation}</h2>
               </div>
               <div className="p-5">
                 {!useForm ? (
@@ -156,15 +157,8 @@ export default function RestaurantPage() {
                   />
                 ) : (
                   <>
-                    <ReservationForm
-                      restaurant={restaurant}
-                      onSuccess={handleComplete}
-                      lang={lang}
-                    />
-                    <button
-                      onClick={() => setUseForm(false)}
-                      className="mt-3 text-xs text-ink-600 hover:text-bordeaux-600"
-                    >
+                    <ReservationForm restaurant={restaurant} onSuccess={handleComplete} lang={lang} />
+                    <button onClick={() => setUseForm(false)} className="mt-3 text-xs text-ink-600 hover:text-bordeaux-600">
                       {t.backToAI}
                     </button>
                   </>
@@ -173,7 +167,7 @@ export default function RestaurantPage() {
             </div>
           </div>
 
-          {/* Info panel (2 cols) */}
+          {/* Info panel */}
           <div className="space-y-4 lg:col-span-2">
             <div className="rounded-xl bg-white p-5 shadow-ticket">
               <h3 className="mb-4 font-display text-lg font-semibold text-ink-900">{t.info}</h3>
@@ -193,9 +187,7 @@ export default function RestaurantPage() {
                     <div>
                       <dt className="font-medium text-ink-900">{t.phone}</dt>
                       <dd className="text-ink-600">
-                        <a href={`tel:${restaurant.phone}`} className="hover:text-bordeaux-600">
-                          {restaurant.phone}
-                        </a>
+                        <a href={`tel:${restaurant.phone}`} className="hover:text-bordeaux-600">{restaurant.phone}</a>
                       </dd>
                     </div>
                   </div>
@@ -205,8 +197,36 @@ export default function RestaurantPage() {
                     <Users size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
                     <div>
                       <dt className="font-medium text-ink-900">{t.maxParty}</dt>
-                      <dd className="text-ink-600">
-                        {restaurant.max_party_size} {t.people}
+                      <dd className="text-ink-600">{restaurant.max_party_size} {t.people}</dd>
+                    </div>
+                  </div>
+                )}
+
+                {/* Horários */}
+                {hours.length > 0 && (
+                  <div className="flex gap-3">
+                    <Clock size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
+                    <div className="w-full">
+                      <dt className="mb-1.5 font-medium text-ink-900">{t.hours}</dt>
+                      <dd>
+                        <ul className="space-y-1">
+                          {hours.map((h) => {
+                            const isToday = h.day_of_week === today
+                            return (
+                              <li
+                                key={h.id}
+                                className={`flex justify-between rounded px-2 py-0.5 text-xs ${
+                                  isToday
+                                    ? 'bg-bordeaux-50 font-semibold text-bordeaux-700'
+                                    : 'text-ink-600'
+                                }`}
+                              >
+                                <span>{DAY_LABELS[h.day_of_week]}</span>
+                                <span>{h.start_time} – {h.end_time}</span>
+                              </li>
+                            )
+                          })}
+                        </ul>
                       </dd>
                     </div>
                   </div>
