@@ -25,26 +25,26 @@ export interface Restaurant {
   slug: string
   name: string
   description?: string
-  cuisine_type?: string       // novo campo (adicionar no banco)
+  cuisine_type?: string
   address?: string
   city?: string
   phone?: string
   email?: string
-  whatsapp_number?: string    // novo campo (adicionar no banco)
-  cover_image_url?: string    // novo campo (adicionar no banco)
-  logo_url?: string           // novo campo (adicionar no banco)
-  max_party_size?: number     // novo campo (adicionar no banco)
+  whatsapp_number?: string
+  cover_image_url?: string
+  logo_url?: string
+  max_party_size?: number
   is_active: boolean
+  status?: RestaurantStatus
   created_at: string
 }
 
-// AvailableHour — usa day_of_week (int 0–6) e is_active, igual ao backend
 export interface AvailableHour {
   id: string
   restaurant_id: string
-  day_of_week: number         // 0=Segunda … 6=Domingo
-  start_time: string          // "HH:MM"
-  end_time: string            // "HH:MM"
+  day_of_week: number
+  start_time: string
+  end_time: string
   interval_minutes: number
   max_capacity: number
   is_active: boolean
@@ -61,17 +61,14 @@ export interface Reservation {
   id: string
   restaurant_id: string
   client_id?: string | null
-  // backend usa guest_name / guest_phone / guest_email
   guest_name?: string
   guest_phone?: string
   guest_email?: string
-  // aliases para compatibilidade com o frontend antigo
   client_name?: string
   client_phone?: string
   client_email?: string
-  reservation_date: string    // "YYYY-MM-DD"
-  reservation_time: string    // "HH:MM"
-  // alias para componentes antigos que usam .date / .time
+  reservation_date: string
+  reservation_time: string
   date?: string
   time?: string
   party_size: number
@@ -79,15 +76,15 @@ export interface Reservation {
   special_requests?: string
   notes?: string
   status: ReservationStatus
-  confirmation_code?: string  // se o backend passar
+  confirmation_code?: string
   source?: 'chatbot' | 'form' | 'whatsapp' | 'admin'
   created_at: string
 }
 
 export interface CreateReservationPayload {
   restaurant_id: string
-  reservation_date: string    // "YYYY-MM-DD"
-  reservation_time: string    // "HH:MM"
+  reservation_date: string
+  reservation_time: string
   party_size: number
   guest_name: string
   guest_phone: string
@@ -132,7 +129,7 @@ export interface ChatbotSettings {
   system_prompt: string
   greeting_message: string
   is_active: boolean
-  is_enabled: boolean         // alias que o backend devolve
+  is_enabled: boolean
 }
 
 export interface ChatMessage {
