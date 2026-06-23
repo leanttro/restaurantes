@@ -10,9 +10,21 @@ class ChatMessage(BaseModel):
     message: str
 
 
+class ReservationDraft(BaseModel):
+    guest_name: Optional[str] = None
+    guest_phone: Optional[str] = None
+    guest_email: Optional[str] = None
+    reservation_date: Optional[str] = None   # YYYY-MM-DD
+    reservation_time: Optional[str] = None   # HH:MM
+    party_size: Optional[int] = None
+    special_requests: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     reply: str
     conversation_id: str
+    reservation_draft: Optional[ReservationDraft] = None
+    is_ready_to_confirm: bool = False
 
 
 class WhatsAppWebhookPayload(BaseModel):
