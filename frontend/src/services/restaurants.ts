@@ -35,6 +35,11 @@ export const restaurantsService = {
     await api.delete(`/restaurants/${id}`)
   },
 
+  async setStatus(id: string, status: 'active' | 'inactive'): Promise<Restaurant> {
+    const { data } = await api.patch<Restaurant>(`/restaurants/${id}/status`, { status })
+    return data
+  },
+
   async getAnalytics(
     id: string,
     dateRange?: { from: string; to: string }
@@ -45,8 +50,6 @@ export const restaurantsService = {
     return data
   },
 
-  // ── Horários ──────────────────────────────────────────────────────────────
-  // Retorna lista de AvailableHour (day_of_week: int, is_active: bool)
   async getHours(restaurantId: string): Promise<AvailableHour[]> {
     const { data } = await api.get<AvailableHour[]>(`/restaurants/${restaurantId}/hours`)
     return data
@@ -67,7 +70,6 @@ export const restaurantsService = {
     await api.delete(`/restaurants/${restaurantId}/hours/${hourId}`)
   },
 
-  // ── Promoções ─────────────────────────────────────────────────────────────
   async getPromotions(restaurantId: string): Promise<Promotion[]> {
     const { data } = await api.get<Promotion[]>(`/restaurants/${restaurantId}/promotions`)
     return data
