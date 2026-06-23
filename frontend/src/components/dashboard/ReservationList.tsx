@@ -29,7 +29,8 @@ export function ReservationList({ restaurantId }: { restaurantId: string }) {
     try {
       const result = await reservationsService.getReservations(restaurantId, {
         status: statusFilter === 'all' ? undefined : statusFilter,
-        date: dateFilter || undefined, limit: 50,
+        date: dateFilter || undefined,
+        limit: 50,
       })
       setReservations(result.items)
     } catch (err) {
@@ -53,6 +54,11 @@ export function ReservationList({ restaurantId }: { restaurantId: string }) {
     setNoteOpenId(null); setNoteDraft('')
   }
 
+  function getName(r: Reservation) { return r.client_name ?? r.guest_name ?? '—' }
+  function getPhone(r: Reservation) { return r.client_phone ?? r.guest_phone ?? '' }
+  function getDate(r: Reservation) { return r.date ?? r.reservation_date }
+  function getTime(r: Reservation) { return r.time ?? r.reservation_time }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -73,8 +79,8 @@ export function ReservationList({ restaurantId }: { restaurantId: string }) {
           <div key={r.id} className="card p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-ink-900">{r.client_name} · {r.party_size} pessoa{r.party_size > 1 ? 's' : ''}</p>
-                <p className="text-sm text-ink-600">{formatRelativeDay(r.date)} · {formatDateTime(r.date, r.time)} · {formatPhone(r.client_phone)}</p>
+                <p className="font-medium text-ink-900">{getName(r)} · {r.party_size} pessoa{r.party_size > 1 ? 's' : ''}</p>
+                <p className="text-sm text-ink-600">{formatRelativeDay(getDate(r))} · {formatDateTime(getDate(r), getTime(r))} · {formatPhone(getPhone(r))}</p>
                 {r.notes && <p className="mt-1 text-xs italic text-ink-600">"{r.notes}"</p>}
               </div>
               <span className={`status-pill ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
