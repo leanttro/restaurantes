@@ -41,6 +41,11 @@ export const reservationsService = {
     return data
   },
 
+  async getReservationByCode(code: string): Promise<Reservation> {
+    const { data } = await api.get<Reservation>(`/reservations/code/${code}`)
+    return data
+  },
+
   async updateStatus(
     restaurantId: string,
     reservationId: string,
