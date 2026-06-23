@@ -37,7 +37,8 @@ export function RestaurantList() {
   }, [search, statusFilter])
 
   async function toggleStatus(r: Restaurant) {
-    const next = r.status === 'active' ? 'inactive' : 'active'
+    const current = r.status ?? (r.is_active ? 'active' : 'inactive')
+    const next = current === 'active' ? 'inactive' : 'active'
     const u = await restaurantsService.setStatus(r.id, next)
     setRestaurants((p) => p.map((x) => (x.id === r.id ? u : x)))
   }
@@ -64,6 +65,10 @@ export function RestaurantList() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  function getStatus(r: Restaurant): RestaurantStatus {
+    return r.status ?? (r.is_active ? 'active' : 'inactive')
   }
 
   return (
@@ -155,7 +160,7 @@ export function RestaurantList() {
                   <td className="px-4 py-3 font-medium">{r.name}</td>
                   <td className="px-4 py-3 text-ink-600">{r.city}</td>
                   <td className="px-4 py-3">
-                    <span className={`status-pill ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                    <span className={`status-pill ${STATUS_CLASS[getStatus(r)]}`}>{STATUS_LABEL[getStatus(r)]}</span>
                   </td>
                   <td className="px-4 py-3 text-ink-600">{formatDate(r.created_at)}</td>
                   <td className="px-4 py-3">
@@ -173,7 +178,7 @@ export function RestaurantList() {
                       <button
                         onClick={() => toggleStatus(r)}
                         className="btn-ghost !py-1.5 text-xs"
-                        title={r.status === 'active' ? 'Desativar' : 'Ativar'}
+                        title={getStatus(r) === 'active' ? 'Desativar' : 'Ativar'}
                       >
                         <Power size={13} />
                       </button>
