@@ -21,6 +21,10 @@ class RestaurantCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     evolution_instance_id: Optional[str] = None
+    banner1_image_url: Optional[str] = None
+    banner1_link_url: Optional[str] = None
+    banner2_image_url: Optional[str] = None
+    banner2_link_url: Optional[str] = None
 
 
 class RestaurantUpdate(BaseModel):
@@ -38,6 +42,10 @@ class RestaurantUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     evolution_instance_id: Optional[str] = None
+    banner1_image_url: Optional[str] = None
+    banner1_link_url: Optional[str] = None
+    banner2_image_url: Optional[str] = None
+    banner2_link_url: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -58,6 +66,10 @@ class RestaurantResponse(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     evolution_instance_id: Optional[str]
+    banner1_image_url: Optional[str]
+    banner1_link_url: Optional[str]
+    banner2_image_url: Optional[str]
+    banner2_link_url: Optional[str]
     is_active: bool
     created_at: datetime
 
