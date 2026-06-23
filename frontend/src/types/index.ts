@@ -33,6 +33,11 @@ export interface Restaurant {
   whatsapp_number?: string
   cover_image_url?: string
   logo_url?: string
+  // Imagens promocionais com link de destino
+  banner1_image_url?: string
+  banner1_link_url?: string
+  banner2_image_url?: string
+  banner2_link_url?: string
   max_party_size?: number
   is_active: boolean
   status?: RestaurantStatus
@@ -53,6 +58,11 @@ export interface AvailableHour {
 export const DAY_LABELS: Record<number, string> = {
   0: 'Segunda', 1: 'Terça', 2: 'Quarta', 3: 'Quinta',
   4: 'Sexta', 5: 'Sábado', 6: 'Domingo',
+}
+
+export const DAY_LABELS_SHORT: Record<number, string> = {
+  0: 'Seg', 1: 'Ter', 2: 'Qua', 3: 'Qui',
+  4: 'Sex', 5: 'Sáb', 6: 'Dom',
 }
 
 export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show'
