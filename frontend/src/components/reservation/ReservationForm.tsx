@@ -1,6 +1,6 @@
 'use client'
-import { FormEvent, useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
+import { FormEvent, useEffect, useState, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, AlertCircle, Calendar, Clock, Users } from 'lucide-react'
 import { reservationsService } from '@/services/reservations'
 import { ApiError } from '@/types/api'
 import { AvailabilitySlot, Reservation, Restaurant } from '@/types'
@@ -18,8 +18,9 @@ const T: Record<Lang, Record<string, string>> = {
     errTime: 'Selecione um horário.', errName: 'Informe seu nome.',
     errPhone: 'Informe um telefone válido (10-11 dígitos).', errSubmit: 'Não foi possível concluir a reserva.',
     person: 'Pessoa', persons: 'Pessoas', advance: 'Avançar', back: 'Voltar',
-    today: 'Hoje', selectDate: 'Selecione uma data acima', success: 'Reserva confirmada!',
-    successMsg: 'Você receberá um e-mail de confirmação com detalhes. Obrigado!',
+    today: 'Hoje', selectDate: 'Selecione uma data acima', chooseDate: 'Escolha a data da Reserva',
+    chooseTime: 'Escolha o horário', available: 'Disponível', unavailable: 'Indisponível',
+    withPromo: 'Com desconto no cardápio',
   },
   en: {
     people: 'People', time: 'Time', name: 'Full name',
@@ -31,8 +32,9 @@ const T: Record<Lang, Record<string, string>> = {
     errTime: 'Select a time slot.', errName: 'Please enter your name.',
     errPhone: 'Please enter a valid phone (10-11 digits).', errSubmit: 'Could not complete the reservation.',
     person: 'Person', persons: 'People', advance: 'Next', back: 'Back',
-    today: 'Today', selectDate: 'Select a date above', success: 'Reservation confirmed!',
-    successMsg: 'You will receive a confirmation email with details. Thank you!',
+    today: 'Today', selectDate: 'Select a date above', chooseDate: 'Choose the Reservation Date',
+    chooseTime: 'Choose the time', available: 'Available', unavailable: 'Unavailable',
+    withPromo: 'With menu discount',
   },
   es: {
     people: 'Personas', time: 'Hora', name: 'Nombre completo',
@@ -44,15 +46,23 @@ const T: Record<Lang, Record<string, string>> = {
     errTime: 'Selecciona un horario.', errName: 'Indica tu nombre.',
     errPhone: 'Indica un teléfono válido (10-11 dígitos).', errSubmit: 'No se pudo completar la reserva.',
     person: 'Persona', persons: 'Personas', advance: 'Avanzar', back: 'Volver',
-    today: 'Hoy', selectDate: 'Selecciona una fecha arriba', success: 'Reserva confirmada!',
-    successMsg: 'Recibirás un correo con los detalles de tu reserva. ¡Gracias!',
+    today: 'Hoy', selectDate: 'Selecciona una fecha arriba', chooseDate: 'Elige la fecha de Reserva',
+    chooseTime: 'Elige el horario', available: 'Disponible', unavailable: 'No disponible',
+    withPromo: 'Con descuento en el menú',
   },
 }
 
-const MONTH_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-const MONTH_FULL_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-const MONTH_FULL_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const MONTH_FULL_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MONTH_FULL: Record<Lang, string[]> = {
+  pt: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
+  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+  es: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
+}
+
+const DAY_SHORT: Record<Lang, string[]> = {
+  pt: ['D','S','T','Q','Q','S','S'],
+  en: ['S','M','T','W','T','F','S'],
+  es: ['D','L','M','X','J','V','S'],
+}
 
 function formatPhoneToE164(phone: string): string {
   const clean = phone.replace(/\D/g, '')
@@ -76,10 +86,6 @@ function formatTime(t: string) {
   return `${h}:${m}`
 }
 
-const DAY_SHORT_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
-const DAY_SHORT_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-const DAY_SHORT_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
-
 interface Props {
   restaurant: Restaurant
   onSuccess: (r: Reservation) => void
@@ -88,15 +94,20 @@ interface Props {
 
 export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
   const t = T[lang]
-  const monthFull = lang === 'en' ? MONTH_FULL_EN : lang === 'es' ? MONTH_FULL_ES : MONTH_FULL_PT
-  const dayShort = lang === 'en' ? DAY_SHORT_EN : lang === 'es' ? DAY_SHORT_ES : DAY_SHORT_PT
+  const months = MONTH_FULL[lang]
+  const days = DAY_SHORT[lang]
 
   const maxParty = restaurant.max_party_size ?? 20
-  const todayStr = new Date().toISOString().slice(0,10)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const todayStr = toDateStr(today)
 
-  const [step, setStep] = useState<1|2>(1)
-  const [date, setDate] = useState('')
+  const [step, setStep] = useState<1 | 2>(1)
   const [partySize, setPartySize] = useState(0)
+  const [date, setDate] = useState('')
+  const [showCal, setShowCal] = useState(false)
+  const [calMonth, setCalMonth] = useState(() => {
+    const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d
+  })
   const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [time, setTime] = useState('')
   const [name, setName] = useState('')
@@ -108,31 +119,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const [weekStart, setWeekStart] = useState<Date>(() => {
-    const d = new Date()
-    d.setHours(0,0,0,0)
-    return d
-  })
-
-  const weekDays = Array.from({length: 7}, (_, i) => {
-    const d = new Date(weekStart)
-    d.setDate(weekStart.getDate() + i)
-    return d
-  })
-
-  function prevWeek() {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() - 7)
-    const today = new Date(); today.setHours(0,0,0,0)
-    if (d < today) setWeekStart(today)
-    else setWeekStart(d)
-  }
-  function nextWeek() {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + 7)
-    setWeekStart(d)
-  }
-
+  // Fetch slots when date or partySize changes
   useEffect(() => {
     if (!date || date <= todayStr || !partySize) { setSlots([]); setTime(''); return }
     let active = true
@@ -145,6 +132,37 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
     return () => { active = false }
   }, [date, partySize, restaurant.id])
 
+  // Build calendar grid
+  const calDays = useCallback(() => {
+    const year = calMonth.getFullYear()
+    const month = calMonth.getMonth()
+    const firstDay = new Date(year, month, 1).getDay() // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const cells: (Date | null)[] = Array(firstDay).fill(null)
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
+    // pad to complete last week
+    while (cells.length % 7 !== 0) cells.push(null)
+    return cells
+  }, [calMonth])
+
+  function prevMonth() {
+    setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+  }
+  function nextMonth() {
+    setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+  }
+  function goToday() {
+    const d = new Date(); d.setDate(1); d.setHours(0,0,0,0)
+    setCalMonth(d)
+  }
+
+  function selectDate(d: Date) {
+    const ds = toDateStr(d)
+    setDate(ds)
+    setTime('')
+    setShowCal(false)
+  }
+
   function validateStep1() {
     const e: Record<string, string | undefined> = {}
     if (!partySize) e.partySize = t.errParty
@@ -153,6 +171,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
     setErrors(e)
     return Object.keys(e).length === 0
   }
+
   function validateStep2() {
     const e: Record<string, string | undefined> = {}
     if (!name.trim()) e.name = t.errName
@@ -186,22 +205,25 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
 
   const selectedDate = date ? new Date(date + 'T00:00:00') : null
   const displayDate = selectedDate
-    ? `${selectedDate.getDate()} de ${monthFull[selectedDate.getMonth()]} de ${selectedDate.getFullYear()}`
+    ? `${String(selectedDate.getDate()).padStart(2,'0')}/${String(selectedDate.getMonth()+1).padStart(2,'0')}/${selectedDate.getFullYear()}`
     : ''
 
-  const calLabel = `${monthFull[weekStart.getMonth()]} ${weekStart.getFullYear()}`
-  const today = new Date(); today.setHours(0,0,0,0)
+  const selectedMonthLabel = `${calMonth.getFullYear()}  ${months[calMonth.getMonth()]}`
+  const cells = calDays()
 
   return (
     <div className="w-full">
       {step === 1 ? (
         <div className="space-y-6">
 
-          {/* ── Slicer de pessoas ────────────────────────── */}
+          {/* ── Slicer de pessoas ── */}
           <div>
-            <p className="label-field mb-3">* {t.people}</p>
+            <p className="label-field mb-3 flex items-center gap-1.5">
+              <Users size={14} className="text-bordeaux-600" />
+              * {t.people}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {Array.from({length: maxParty}, (_, i) => i + 1).map(n => (
+              {Array.from({ length: maxParty }, (_, i) => i + 1).map(n => (
                 <button
                   key={n}
                   type="button"
@@ -219,83 +241,139 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
             {errors.partySize && <p className="error-text mt-1">{errors.partySize}</p>}
           </div>
 
-          {/* ── Calendário semanal (slicer de datas) ────── */}
+          {/* ── Calendário ── */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="label-field">{calLabel}</p>
-              <div className="flex gap-1">
-                <button type="button" onClick={prevWeek} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700">
-                  <ChevronLeft size={16} />
-                </button>
-                <button type="button" onClick={nextWeek} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {weekDays.map((d, i) => {
-                const ds = toDateStr(d)
-                const isPast = d <= today
-                const isSelected = ds === date
-                const dayNum = d.getDay()
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    disabled={isPast}
-                    onClick={() => { setDate(ds); setTime('') }}
-                    className={`flex flex-col items-center rounded-xl py-2 px-1 transition-all
-                      ${isSelected ? 'bg-bordeaux-600 text-white shadow-sm' : ''}
-                      ${!isSelected && !isPast ? 'border border-ink-900/10 text-ink-700 hover:border-bordeaux-400 hover:bg-bordeaux-50' : ''}
-                      ${isPast ? 'text-ink-400/40 cursor-not-allowed' : ''}
-                    `}
-                  >
-                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${isSelected ? 'text-white/80' : isPast ? 'text-ink-400/40' : 'text-ink-400'}`}>
-                      {dayShort[dayNum]}
-                    </span>
-                    <span className="mt-0.5 text-base font-bold leading-none">{d.getDate()}</span>
-                    <span className={`text-[9px] mt-0.5 ${isSelected ? 'text-white/70' : isPast ? 'text-ink-400/40' : 'text-ink-400'}`}>
-                      {MONTH_PT[d.getMonth()]}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+            <p className="label-field mb-2 flex items-center gap-1.5">
+              <Calendar size={14} className="text-bordeaux-600" />
+              * Data
+            </p>
+
+            {/* Input trigger */}
+            <button
+              type="button"
+              onClick={() => setShowCal(v => !v)}
+              className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-all
+                ${showCal ? 'border-bordeaux-600 ring-1 ring-bordeaux-300' : 'border-ink-900/15 hover:border-bordeaux-400'}
+                ${date ? 'text-ink-900 font-medium' : 'text-ink-400'}
+              `}
+            >
+              <span>{date ? displayDate : t.chooseDate}</span>
+              <Calendar size={16} className="text-ink-400 shrink-0" />
+            </button>
             {errors.date && <p className="error-text mt-1">{errors.date}</p>}
+
+            {/* Calendar dropdown */}
+            {showCal && (
+              <div className="mt-2 rounded-2xl border border-ink-900/10 bg-white shadow-lg overflow-hidden">
+                {/* Month nav */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-ink-900/8">
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setCalMonth(m => new Date(m.getFullYear() - 1, m.getMonth(), 1))} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700 text-xs">‹‹</button>
+                    <button type="button" onClick={prevMonth} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700">‹</button>
+                  </div>
+                  <span className="text-sm font-semibold text-ink-800 tracking-wide">{selectedMonthLabel}</span>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={nextMonth} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700">›</button>
+                    <button type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear() + 1, calMonth.getMonth(), 1))} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700 text-xs">››</button>
+                  </div>
+                </div>
+
+                {/* Day headers */}
+                <div className="grid grid-cols-7 px-3 pt-3">
+                  {days.map((d, i) => (
+                    <div key={i} className={`text-center text-[11px] font-bold pb-2 ${i === 0 ? 'text-rust-600' : 'text-ink-500'}`}>{d}</div>
+                  ))}
+                </div>
+
+                {/* Day cells */}
+                <div className="grid grid-cols-7 px-3 pb-3 gap-y-1">
+                  {cells.map((d, i) => {
+                    if (!d) return <div key={i} />
+                    const ds = toDateStr(d)
+                    const isPast = d <= today
+                    const isSelected = ds === date
+                    const isSun = d.getDay() === 0
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={isPast}
+                        onClick={() => selectDate(d)}
+                        className={`
+                          relative flex flex-col items-center justify-center rounded-full w-9 h-9 mx-auto text-sm font-medium transition-all
+                          ${isSelected ? 'bg-bordeaux-600 text-white shadow' : ''}
+                          ${!isSelected && !isPast ? `hover:bg-bordeaux-50 hover:text-bordeaux-700 ${isSun ? 'text-rust-600' : 'text-ink-800'}` : ''}
+                          ${isPast ? 'text-ink-300 cursor-not-allowed' : ''}
+                        `}
+                      >
+                        {d.getDate()}
+                        {/* availability dot — shown only for future dates */}
+                        {!isPast && (
+                          <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isSelected ? 'bg-white/60' : 'bg-ink-800'}`} />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Legend + today button */}
+                <div className="border-t border-ink-900/8 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[11px] text-ink-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-ink-800 inline-block" />{t.available}</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-ink-300 inline-block" />{t.unavailable}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={goToday}
+                    className="rounded-lg bg-bordeaux-600 px-3 py-1 text-xs font-semibold text-white hover:bg-bordeaux-700 transition-colors"
+                  >
+                    {t.today}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Slicer de horários ───────────────────────── */}
+          {/* ── Horário (dropdown) ── */}
           <div>
-            <p className="label-field mb-3">* {t.time}</p>
-            {!date ? (
-              <p className="text-xs text-ink-400">{t.selectDate}</p>
+            <p className="label-field mb-2 flex items-center gap-1.5">
+              <Clock size={14} className="text-bordeaux-600" />
+              * {t.time}
+            </p>
+            {!date || date <= todayStr ? (
+              <div className="w-full rounded-xl border border-ink-900/10 px-4 py-3 text-sm text-ink-400 bg-sand-50">
+                {t.chooseDate}
+              </div>
             ) : !partySize ? (
-              <p className="text-xs text-ink-400">{t.errParty}</p>
+              <div className="w-full rounded-xl border border-ink-900/10 px-4 py-3 text-sm text-ink-400 bg-sand-50">
+                {t.errParty}
+              </div>
             ) : loadingSlots ? (
-              <div className="flex items-center gap-2 text-sm text-ink-600">
-                <Loader2 size={14} className="animate-spin" /> {t.loading}
+              <div className="flex items-center gap-2 text-sm text-ink-600 px-4 py-3 rounded-xl border border-ink-900/10">
+                <Loader2 size={14} className="animate-spin text-bordeaux-600" /> {t.loading}
               </div>
             ) : slots.length === 0 ? (
-              <p className="text-sm text-ink-500">{t.noSlots}</p>
+              <div className="w-full rounded-xl border border-ink-900/10 px-4 py-3 text-sm text-ink-500 bg-sand-50">
+                {t.noSlots}
+              </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {slots.map(slot => (
-                  <button
-                    key={slot.time}
-                    type="button"
-                    disabled={!slot.is_available}
-                    onClick={() => setTime(slot.time)}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all
-                      ${time === slot.time
-                        ? 'border-bordeaux-600 bg-bordeaux-600 text-white shadow-sm'
-                        : slot.is_available
-                          ? 'border-ink-900/15 text-ink-700 hover:border-bordeaux-400 hover:bg-bordeaux-50'
-                          : 'cursor-not-allowed border-ink-900/8 text-ink-400/50 line-through'
-                      }`}
-                  >
-                    {formatTime(slot.time)}
-                  </button>
-                ))}
+              <div className="relative">
+                <select
+                  value={time}
+                  onChange={e => setTime(e.target.value)}
+                  className={`w-full appearance-none rounded-xl border px-4 py-3 pr-10 text-sm transition-all bg-white
+                    ${time ? 'border-bordeaux-600 text-ink-900 font-medium' : 'border-ink-900/15 text-ink-400'}
+                    focus:outline-none focus:border-bordeaux-600 focus:ring-1 focus:ring-bordeaux-300
+                  `}
+                >
+                  <option value="">{t.chooseTime}</option>
+                  {slots.map(slot => (
+                    <option key={slot.time} value={slot.time} disabled={!slot.is_available}>
+                      {formatTime(slot.time)}{!slot.is_available ? ` — ${t.unavailable}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-ink-400 pointer-events-none" />
               </div>
             )}
             {errors.time && <p className="error-text mt-1">{errors.time}</p>}
@@ -324,22 +402,46 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
           <div className="space-y-3">
             <div>
               <label className="label-field">{t.name} *</label>
-              <input value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder={t.namePh} />
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="input-field"
+                placeholder={t.namePh}
+                autoComplete="name"
+              />
               {errors.name && <p className="error-text mt-0.5">{errors.name}</p>}
             </div>
             <div>
               <label className="label-field">{t.whatsapp} *</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="input-field" placeholder={t.phonePh} />
+              <input
+                type="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="input-field"
+                placeholder={t.phonePh}
+                autoComplete="tel"
+              />
               {errors.phone && <p className="error-text mt-0.5">{errors.phone}</p>}
-              <p className="text-xs text-ink-400 mt-1">Será convertido automaticamente para WhatsApp</p>
             </div>
             <div>
               <label className="label-field">{t.email}</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder={t.emailPh} />
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="input-field"
+                placeholder={t.emailPh}
+                autoComplete="email"
+              />
             </div>
             <div>
               <label className="label-field">{t.notes}</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input-field min-h-[72px] resize-none" placeholder={t.notesPh} />
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="input-field min-h-[72px] resize-none"
+                placeholder={t.notesPh}
+              />
             </div>
           </div>
 
@@ -351,7 +453,9 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center">{t.back}</button>
+            <button type="button" onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center">
+              {t.back}
+            </button>
             <button type="submit" disabled={submitting} className="btn-primary flex-1 justify-center">
               {submitting && <Loader2 size={16} className="animate-spin" />}
               {t.confirm}
