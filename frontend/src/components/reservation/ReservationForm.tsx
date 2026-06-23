@@ -1,6 +1,6 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react'
 import { reservationsService } from '@/services/reservations'
 import { ApiError } from '@/types/api'
 import { AvailabilitySlot, Reservation, Restaurant } from '@/types'
@@ -16,9 +16,10 @@ const T: Record<Lang, Record<string, string>> = {
     notesPh: 'Aniversário, alergias, preferência de mesa…',
     errDate: 'Escolha uma data.', errParty: 'Selecione a quantidade de pessoas.',
     errTime: 'Selecione um horário.', errName: 'Informe seu nome.',
-    errPhone: 'Informe um telefone válido.', errSubmit: 'Não foi possível concluir a reserva.',
+    errPhone: 'Informe um telefone válido (10-11 dígitos).', errSubmit: 'Não foi possível concluir a reserva.',
     person: 'Pessoa', persons: 'Pessoas', advance: 'Avançar', back: 'Voltar',
-    today: 'Hoje', selectDate: 'Selecione uma data acima',
+    today: 'Hoje', selectDate: 'Selecione uma data acima', success: 'Reserva confirmada!',
+    successMsg: 'Você receberá um e-mail de confirmação com detalhes. Obrigado!',
   },
   en: {
     people: 'People', time: 'Time', name: 'Full name',
@@ -28,9 +29,10 @@ const T: Record<Lang, Record<string, string>> = {
     notesPh: 'Birthday, allergies, table preference…',
     errDate: 'Choose a date.', errParty: 'Select number of people.',
     errTime: 'Select a time slot.', errName: 'Please enter your name.',
-    errPhone: 'Please enter a valid phone.', errSubmit: 'Could not complete the reservation.',
+    errPhone: 'Please enter a valid phone (10-11 digits).', errSubmit: 'Could not complete the reservation.',
     person: 'Person', persons: 'People', advance: 'Next', back: 'Back',
-    today: 'Today', selectDate: 'Select a date above',
+    today: 'Today', selectDate: 'Select a date above', success: 'Reservation confirmed!',
+    successMsg: 'You will receive a confirmation email with details. Thank you!',
   },
   es: {
     people: 'Personas', time: 'Hora', name: 'Nombre completo',
@@ -40,9 +42,10 @@ const T: Record<Lang, Record<string, string>> = {
     notesPh: 'Cumpleaños, alergias, preferencia de mesa…',
     errDate: 'Elige una fecha.', errParty: 'Selecciona el número de personas.',
     errTime: 'Selecciona un horario.', errName: 'Indica tu nombre.',
-    errPhone: 'Indica un teléfono válido.', errSubmit: 'No se pudo completar la reserva.',
+    errPhone: 'Indica un teléfono válido (10-11 dígitos).', errSubmit: 'No se pudo completar la reserva.',
     person: 'Persona', persons: 'Personas', advance: 'Avanzar', back: 'Volver',
-    today: 'Hoy', selectDate: 'Selecciona una fecha arriba',
+    today: 'Hoy', selectDate: 'Selecciona una fecha arriba', success: 'Reserva confirmada!',
+    successMsg: 'Recibirás un correo con los detalles de tu reserva. ¡Gracias!',
   },
 }
 
@@ -51,17 +54,17 @@ const MONTH_FULL_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Ju
 const MONTH_FULL_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTH_FULL_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
-// Gera os próximos N dias a partir de hoje
-function getNextDays(n: number) {
-  const days = []
-  const today = new Date()
-  today.setHours(0,0,0,0)
-  for (let i = 1; i <= n; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    days.push(d)
-  }
-  return days
+function formatPhoneToE164(phone: string): string {
+  const clean = phone.replace(/\D/g, '')
+  if (clean.length === 11) return `55${clean}`
+  if (clean.length === 10) return `55${clean}`
+  if (clean.length >= 12) return clean.startsWith('55') ? clean : clean.slice(1)
+  return clean
+}
+
+function isValidPhone(phone: string): boolean {
+  const clean = phone.replace(/\D/g, '')
+  return clean.length >= 10 && clean.length <= 13
 }
 
 function toDateStr(d: Date) {
@@ -105,14 +108,12 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Calendário: semana visível (começa no domingo antes de hoje)
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const d = new Date()
     d.setHours(0,0,0,0)
     return d
   })
 
-  // Gera 7 dias a partir de weekStart
   const weekDays = Array.from({length: 7}, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(weekStart.getDate() + i)
@@ -122,7 +123,6 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
   function prevWeek() {
     const d = new Date(weekStart)
     d.setDate(d.getDate() - 7)
-    // não vai antes de hoje
     const today = new Date(); today.setHours(0,0,0,0)
     if (d < today) setWeekStart(today)
     else setWeekStart(d)
@@ -133,7 +133,6 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
     setWeekStart(d)
   }
 
-  // Busca slots quando data ou partySize mudam
   useEffect(() => {
     if (!date || date <= todayStr || !partySize) { setSlots([]); setTime(''); return }
     let active = true
@@ -157,7 +156,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
   function validateStep2() {
     const e: Record<string, string | undefined> = {}
     if (!name.trim()) e.name = t.errName
-    if (!phone.trim() || phone.trim().length < 8) e.phone = t.errPhone
+    if (!isValidPhone(phone)) e.phone = t.errPhone
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -168,14 +167,16 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
     if (!validateStep2()) return
     setSubmitting(true)
     try {
+      const phoneE164 = formatPhoneToE164(phone)
       const reservation = await reservationsService.createReservation({
         restaurant_id: restaurant.id,
-        guest_name: name, guest_phone: phone,
-        guest_email: email || undefined,
-        reservation_date: date, reservation_time: time,
+        guest_name: name.trim(),
+        guest_phone: phoneE164,
+        guest_email: email.trim() || undefined,
+        reservation_date: date,
+        reservation_time: time,
         party_size: partySize,
-        special_requests: notes || undefined,
-        source: 'form',
+        special_requests: notes.trim() || undefined,
       })
       onSuccess(reservation)
     } catch (err) {
@@ -188,7 +189,6 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
     ? `${selectedDate.getDate()} de ${monthFull[selectedDate.getMonth()]} de ${selectedDate.getFullYear()}`
     : ''
 
-  // Mês/ano do calendário exibido (baseado na semana atual)
   const calLabel = `${monthFull[weekStart.getMonth()]} ${weekStart.getFullYear()}`
   const today = new Date(); today.setHours(0,0,0,0)
 
@@ -199,7 +199,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
 
           {/* ── Slicer de pessoas ────────────────────────── */}
           <div>
-            <p className="label-field mb-2">* {t.people}</p>
+            <p className="label-field mb-3">* {t.people}</p>
             <div className="flex flex-wrap gap-2">
               {Array.from({length: maxParty}, (_, i) => i + 1).map(n => (
                 <button
@@ -221,7 +221,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
 
           {/* ── Calendário semanal (slicer de datas) ────── */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3">
               <p className="label-field">{calLabel}</p>
               <div className="flex gap-1">
                 <button type="button" onClick={prevWeek} className="rounded p-1 text-ink-400 hover:bg-sand-100 hover:text-ink-700">
@@ -266,7 +266,7 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
 
           {/* ── Slicer de horários ───────────────────────── */}
           <div>
-            <p className="label-field mb-2">* {t.time}</p>
+            <p className="label-field mb-3">* {t.time}</p>
             {!date ? (
               <p className="text-xs text-ink-400">{t.selectDate}</p>
             ) : !partySize ? (
@@ -321,28 +321,36 @@ export function ReservationForm({ restaurant, onSuccess, lang = 'pt' }: Props) {
             <span className="font-semibold">{formatTime(time)}</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-3">
             <div>
-              <label className="label-field">{t.name}</label>
+              <label className="label-field">{t.name} *</label>
               <input value={name} onChange={e => setName(e.target.value)} className="input-field" placeholder={t.namePh} />
-              {errors.name && <p className="error-text">{errors.name}</p>}
+              {errors.name && <p className="error-text mt-0.5">{errors.name}</p>}
             </div>
             <div>
-              <label className="label-field">{t.whatsapp}</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} className="input-field" placeholder={t.phonePh} />
-              {errors.phone && <p className="error-text">{errors.phone}</p>}
+              <label className="label-field">{t.whatsapp} *</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="input-field" placeholder={t.phonePh} />
+              {errors.phone && <p className="error-text mt-0.5">{errors.phone}</p>}
+              <p className="text-xs text-ink-400 mt-1">Será convertido automaticamente para WhatsApp</p>
+            </div>
+            <div>
+              <label className="label-field">{t.email}</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder={t.emailPh} />
+            </div>
+            <div>
+              <label className="label-field">{t.notes}</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input-field min-h-[72px] resize-none" placeholder={t.notesPh} />
             </div>
           </div>
-          <div>
-            <label className="label-field">{t.email}</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder={t.emailPh} />
-          </div>
-          <div>
-            <label className="label-field">{t.notes}</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input-field min-h-[72px] resize-none" placeholder={t.notesPh} />
-          </div>
-          {submitError && <p className="rounded bg-rust-500/10 px-3 py-2 text-sm font-medium text-rust-600">{submitError}</p>}
-          <div className="flex gap-3">
+
+          {submitError && (
+            <div className="rounded-lg bg-rust-500/10 px-4 py-3 flex gap-3 items-start">
+              <AlertCircle size={16} className="text-rust-600 mt-0.5 shrink-0" />
+              <p className="text-sm font-medium text-rust-600">{submitError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center">{t.back}</button>
             <button type="submit" disabled={submitting} className="btn-primary flex-1 justify-center">
               {submitting && <Loader2 size={16} className="animate-spin" />}
