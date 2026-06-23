@@ -20,25 +20,32 @@ groq_client = Groq(api_key=settings.GROQ_API_KEY)
 RESERVATION_SYSTEM_SUFFIX = """
 
 COLETA DE DADOS PARA RESERVA:
-Quando o cliente quiser fazer uma reserva, você DEVE coletar obrigatoriamente:
-1. Nome completo
-2. Número de WhatsApp (com DDD)
-3. Data da reserva (formato YYYY-MM-DD)
-4. Horário (formato HH:MM)
-5. Número de pessoas
+Quando o cliente quiser fazer uma reserva, colete de forma NATURAL e CONVERSACIONAL:
+1. Quantidade de pessoas
+2. Dia e mês (ex: "dia 25 de junho", "amanhã", "sábado") — NUNCA peça no formato YYYY-MM-DD
+3. Horário (ex: "às 19h", "às 20:30") — NUNCA peça no formato HH:MM
+4. Nome completo do cliente
+5. Número de WhatsApp com DDD
 
-Se algum dado ainda estiver faltando, pergunte de forma natural e amigável.
+Pergunte um ou dois dados por vez, de forma amigável. Exemplo:
+- "Pra quantas pessoas?" 
+- "Qual dia você prefere?"
+- "Que horário fica melhor?"
+- "Qual seu nome?"
+- "E seu WhatsApp com DDD?"
 
-Quando TODOS os dados obrigatórios estiverem coletados, responda EXATAMENTE neste formato JSON
-(nada antes, nada depois — só o JSON):
+CONVERSÃO INTERNA (nunca mostre esses formatos ao cliente):
+- Datas relativas: "hoje" = data de hoje, "amanhã" = data de amanhã, "sábado" = próximo sábado
+- Sempre converta para YYYY-MM-DD internamente
+- Horários: "19h" → "19:00", "20h30" → "20:30"
+- Telefone: remova tudo que não for número, mantenha DDD + número (10 ou 11 dígitos)
 
-{"reply": "Sua mensagem amigável de confirmação aqui", "reservation_draft": {"guest_name": "Nome", "guest_phone": "11999999999", "reservation_date": "2024-06-25", "reservation_time": "19:00", "party_size": 4, "guest_email": null, "special_requests": null}, "is_ready_to_confirm": true}
+Quando TODOS os 5 dados estiverem coletados, responda EXATAMENTE neste JSON (nada antes, nada depois):
 
-Para telefone: remova todos os caracteres não numéricos, mantenha DDD + número (10 ou 11 dígitos).
-Para data: converta para YYYY-MM-DD.
-Para horário: converta para HH:MM (24h).
+{"reply": "Mensagem amigável confirmando os dados coletados e perguntando se pode confirmar", "reservation_draft": {"guest_name": "Nome", "guest_phone": "11999999999", "reservation_date": "2024-06-25", "reservation_time": "19:00", "party_size": 4, "guest_email": null, "special_requests": null}, "is_ready_to_confirm": true}
 
 Enquanto ainda estiver coletando dados, responda normalmente em texto (sem JSON).
+Data de hoje para referência: use a data atual do sistema.
 """
 
 
@@ -47,7 +54,6 @@ class ChatbotService:
         self.db = db
 
     def _get_or_create_conversation(self, restaurant_id, client_phone: str) -> ChatConversation:
-        """Retrieve active conversation or start a new one."""
         conv = self.db.query(ChatConversation).filter(
             ChatConversation.restaurant_id == restaurant_id,
             ChatConversation.client_phone == client_phone,
@@ -73,7 +79,9 @@ class ChatbotService:
         return conv
 
     def _build_system_prompt(self, restaurant: Restaurant, setting: Optional[ChatbotSetting]) -> str:
-        """Build the system prompt with reservation data collection instructions."""
+        from datetime import date
+        today_str = date.today().strftime("%d/%m/%Y")
+
         if setting and setting.system_prompt:
             base = setting.system_prompt.replace("{restaurant_name}", restaurant.name)
         else:
@@ -82,10 +90,9 @@ class ChatbotService:
                 "Ajude os clientes a fazer reservas, verificar horários e promoções. "
                 "Responda sempre em português, de forma cordial e objetiva."
             )
-        return base + RESERVATION_SYSTEM_SUFFIX
+        return base + RESERVATION_SYSTEM_SUFFIX + f"\nData de hoje: {today_str}"
 
     def _call_groq(self, messages: list[dict], temperature: float) -> str:
-        """Attempt Groq completion with automatic fallback across models."""
         last_error: Optional[Exception] = None
 
         for model in GROQ_FALLBACK_MODELS:
@@ -109,11 +116,6 @@ class ChatbotService:
         raise RuntimeError(f"All Groq models failed. Last error: {last_error}")
 
     def _parse_groq_response(self, raw: str) -> dict:
-        """
-        Try to extract JSON from the AI reply.
-        Returns dict with keys: reply, reservation_draft, is_ready_to_confirm
-        """
-        # Try to find JSON block in the response
         json_match = re.search(r'\{.*"is_ready_to_confirm".*?\}', raw, re.DOTALL)
         if json_match:
             try:
@@ -126,7 +128,6 @@ class ChatbotService:
             except json.JSONDecodeError:
                 pass
 
-        # No JSON found — plain text response, still collecting data
         return {
             "reply": raw,
             "reservation_draft": None,
@@ -134,10 +135,6 @@ class ChatbotService:
         }
 
     async def process_message(self, restaurant_id, client_phone: str, user_message: str) -> dict:
-        """
-        Process an incoming chat message and return the AI reply.
-        Returns dict with: reply, conversation_id, reservation_draft, is_ready_to_confirm
-        """
         restaurant = self.db.query(Restaurant).filter(
             Restaurant.id == restaurant_id, Restaurant.is_active == True
         ).first()
