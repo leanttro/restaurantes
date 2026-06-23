@@ -3,7 +3,11 @@ import { ChatbotMessagePayload, ChatbotMessageResponse, ChatbotSettings } from '
 
 export const chatbotService = {
   async sendMessage(payload: ChatbotMessagePayload): Promise<ChatbotMessageResponse> {
-    const { data } = await api.post<ChatbotMessageResponse>('/chatbot/message', payload)
+    const { restaurant_id, ...body } = payload
+    const { data } = await api.post<ChatbotMessageResponse>(
+      `/restaurants/${restaurant_id}/chatbot/message`,
+      body
+    )
     return data
   },
   async getSettings(restaurantId: string): Promise<ChatbotSettings> {
