@@ -8,7 +8,7 @@ import { ApiError } from '@/types/api'
 import { CreatePromotionPayload, Promotion } from '@/types'
 
 const EMPTY: CreatePromotionPayload = {
-  title: '', description: '', discount_type: 'percent', discount_value: 10,
+  title: '', description: '', discount_type: 'percentage', discount_value: 10,
   valid_from: '', valid_until: '', conditions: undefined,
 }
 
@@ -103,7 +103,7 @@ export function PromotionManager({ restaurantId }: { restaurantId: string }) {
           <div key={p.id} className="card flex items-start justify-between gap-3 p-4">
             <div>
               <p className="font-medium text-ink-900">
-                {p.title} <span className="text-gold-600">· {p.discount_value}{p.discount_type === 'percent' ? '%' : ' R$'} off</span>
+                {p.title} <span className="text-gold-600">· {p.discount_value}{p.discount_type === 'percentage' ? '%' : ' R$'} off</span>
               </p>
               {p.description && <p className="text-sm text-ink-600">{p.description}</p>}
               <p className="mt-1 text-xs text-ink-400">Válida de {formatDate(p.valid_from)} até {formatDate(p.valid_until)}</p>
