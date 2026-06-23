@@ -37,6 +37,12 @@ class Restaurant(Base):
     # WhatsApp integration
     evolution_instance_id = Column(String(255), nullable=True)
 
+    # Banners clicáveis
+    banner1_image_url = Column(String(500), nullable=True)
+    banner1_link_url = Column(String(500), nullable=True)
+    banner2_image_url = Column(String(500), nullable=True)
+    banner2_link_url = Column(String(500), nullable=True)
+
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -71,6 +77,10 @@ class Restaurant(Base):
             "latitude": self.latitude,
             "longitude": self.longitude,
             "evolution_instance_id": self.evolution_instance_id,
+            "banner1_image_url": self.banner1_image_url,
+            "banner1_link_url": self.banner1_link_url,
+            "banner2_image_url": self.banner2_image_url,
+            "banner2_link_url": self.banner2_link_url,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat(),
         }
