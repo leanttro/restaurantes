@@ -42,7 +42,7 @@ def get_chatbot_settings(restaurant_id: UUID, db: Session = Depends(get_db)):
     setting = _get_or_create_setting(restaurant_id, db)
     return {
         **setting.to_dict(),
-        "is_enabled": setting.is_active,  # alias que o frontend usa
+        "is_enabled": setting.is_active,
     }
 
 
@@ -83,7 +83,12 @@ async def chat(
         client_phone=data.client_phone,
         user_message=data.message,
     )
-    return ChatResponse(reply=result["reply"], conversation_id=result["conversation_id"])
+    return ChatResponse(
+        reply=result["reply"],
+        conversation_id=result["conversation_id"],
+        reservation_draft=result.get("reservation_draft"),
+        is_ready_to_confirm=result.get("is_ready_to_confirm", False),
+    )
 
 
 @router.post("/{restaurant_id}/chatbot/test")
