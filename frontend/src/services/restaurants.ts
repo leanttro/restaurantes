@@ -1,23 +1,18 @@
 import { api } from './api'
 import {
   AnalyticsSummary,
+  AvailableHour,
   CreatePromotionPayload,
-  OperatingHour,
   PaginatedResponse,
   Promotion,
   Restaurant,
 } from '@/types'
 
 export const restaurantsService = {
-  async getRestaurants(params: {
-    page?: number
-    limit?: number
-    search?: string
-    status?: string
-  } = {}): Promise<PaginatedResponse<Restaurant>> {
-    const { data } = await api.get<PaginatedResponse<Restaurant>>('/restaurants', {
-      params,
-    })
+  async getRestaurants(
+    params: { page?: number; limit?: number; search?: string; status?: string } = {}
+  ): Promise<PaginatedResponse<Restaurant>> {
+    const { data } = await api.get<PaginatedResponse<Restaurant>>('/restaurants', { params })
     return data
   },
 
@@ -40,11 +35,6 @@ export const restaurantsService = {
     await api.delete(`/restaurants/${id}`)
   },
 
-  async setStatus(id: string, status: Restaurant['status']): Promise<Restaurant> {
-    const { data } = await api.patch<Restaurant>(`/restaurants/${id}/status`, { status })
-    return data
-  },
-
   async getAnalytics(
     id: string,
     dateRange?: { from: string; to: string }
@@ -55,25 +45,29 @@ export const restaurantsService = {
     return data
   },
 
-  // --- Horários de funcionamento ---
-  async getHours(restaurantId: string): Promise<OperatingHour[]> {
-    const { data } = await api.get<OperatingHour[]>(`/restaurants/${restaurantId}/hours`)
+  // ── Horários ──────────────────────────────────────────────────────────────
+  // Retorna lista de AvailableHour (day_of_week: int, is_active: bool)
+  async getHours(restaurantId: string): Promise<AvailableHour[]> {
+    const { data } = await api.get<AvailableHour[]>(`/restaurants/${restaurantId}/hours`)
     return data
   },
 
-  async updateHour(
+  async createHour(
     restaurantId: string,
-    hourId: string,
-    payload: Partial<OperatingHour>
-  ): Promise<OperatingHour> {
-    const { data } = await api.put<OperatingHour>(
-      `/restaurants/${restaurantId}/hours/${hourId}`,
+    payload: Omit<AvailableHour, 'id' | 'restaurant_id'>
+  ): Promise<AvailableHour> {
+    const { data } = await api.post<AvailableHour>(
+      `/restaurants/${restaurantId}/hours`,
       payload
     )
     return data
   },
 
-  // --- Promoções ---
+  async deleteHour(restaurantId: string, hourId: string): Promise<void> {
+    await api.delete(`/restaurants/${restaurantId}/hours/${hourId}`)
+  },
+
+  // ── Promoções ─────────────────────────────────────────────────────────────
   async getPromotions(restaurantId: string): Promise<Promotion[]> {
     const { data } = await api.get<Promotion[]>(`/restaurants/${restaurantId}/promotions`)
     return data
