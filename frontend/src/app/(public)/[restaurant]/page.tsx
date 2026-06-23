@@ -5,7 +5,7 @@ import { restaurantsService } from '@/services/restaurants'
 import { ChatbotWidget } from '@/components/reservation/ChatbotWidget'
 import { ReservationForm } from '@/components/reservation/ReservationForm'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
-import { Restaurant, Reservation, AvailableHour, DAY_LABELS } from '@/types'
+import { Restaurant, Reservation, AvailableHour, DAY_LABELS, DAY_LABELS_SHORT } from '@/types'
 import { Clock, Globe, MapPin, Phone, Users } from 'lucide-react'
 
 type Lang = 'pt' | 'en' | 'es'
@@ -39,8 +39,8 @@ const T: Record<Lang, Record<string, string>> = {
 
 // day_of_week do JS: 0=Domingo, 1=Segunda... — converte pro padrão do backend (0=Segunda)
 function todayDayOfWeek() {
-  const js = new Date().getDay() // 0=Dom,1=Seg...
-  return js === 0 ? 6 : js - 1  // converte: Dom→6, Seg→0, ...
+  const js = new Date().getDay()
+  return js === 0 ? 6 : js - 1
 }
 
 export default function RestaurantPage() {
@@ -90,14 +90,20 @@ export default function RestaurantPage() {
       </div>
     )
 
+  // Horários para o mini-calendário semanal
+  const hoursByDay: Record<number, AvailableHour> = {}
+  hours.forEach(h => { hoursByDay[h.day_of_week] = h })
+  const weekDays = [0, 1, 2, 3, 4, 5, 6]
+
   return (
     <div className="min-h-screen bg-sand-50">
       {/* ── Hero ─────────────────────────────────────────────────── */}
-      <div className="relative bg-bordeaux-700 pb-24 pt-10">
+      <div className="relative bg-bordeaux-700 pb-24 pt-10 overflow-hidden">
+        {/* Foto de fundo transparente (cover_image_url usada duas vezes) */}
         {restaurant.cover_image_url && (
           <img
             src={restaurant.cover_image_url}
-            alt={restaurant.name}
+            alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-20"
           />
         )}
@@ -121,17 +127,38 @@ export default function RestaurantPage() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
-          {restaurant.logo_url && (
-            <img src={restaurant.logo_url} alt="logo" className="mb-4 h-16 w-16 rounded-xl object-cover shadow-lg" />
-          )}
-          <h1 className="font-display text-4xl font-bold text-white">{restaurant.name}</h1>
-          {(restaurant.cuisine_type || restaurant.city) && (
-            <p className="mt-1 text-sm font-medium text-gold-400">
-              {[restaurant.cuisine_type, restaurant.city].filter(Boolean).join(' · ')}
-            </p>
-          )}
-          {restaurant.description && (
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-sand-100/80">{restaurant.description}</p>
+          <div className="flex items-end gap-5">
+            {/* Logo */}
+            {restaurant.logo_url && (
+              <img
+                src={restaurant.logo_url}
+                alt="logo"
+                className="h-20 w-20 rounded-2xl object-cover shadow-lg border-2 border-white/20 shrink-0"
+              />
+            )}
+            <div>
+              <h1 className="font-display text-4xl font-bold text-white">{restaurant.name}</h1>
+              {(restaurant.cuisine_type || restaurant.city) && (
+                <p className="mt-1 text-sm font-medium text-gold-400">
+                  {[restaurant.cuisine_type, restaurant.city].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              {restaurant.description && (
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-sand-100/80">{restaurant.description}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Foto destaque do local (cover_image_url em destaque) */}
+          {restaurant.cover_image_url && (
+            <div className="mt-5 overflow-hidden rounded-2xl shadow-lg" style={{ maxHeight: 220 }}>
+              <img
+                src={restaurant.cover_image_url}
+                alt={restaurant.name}
+                className="w-full object-cover"
+                style={{ maxHeight: 220 }}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -202,37 +229,77 @@ export default function RestaurantPage() {
                   </div>
                 )}
 
-                {/* Horários */}
+                {/* Horários — mini calendário semanal */}
                 {hours.length > 0 && (
                   <div className="flex gap-3">
                     <Clock size={16} className="mt-0.5 shrink-0 text-bordeaux-600" />
                     <div className="w-full">
-                      <dt className="mb-1.5 font-medium text-ink-900">{t.hours}</dt>
+                      <dt className="mb-2 font-medium text-ink-900">{t.hours}</dt>
                       <dd>
-                        <ul className="space-y-1">
-                          {hours.map((h) => {
-                            const isToday = h.day_of_week === today
+                        <div className="grid grid-cols-7 gap-0.5">
+                          {weekDays.map((dow) => {
+                            const h = hoursByDay[dow]
+                            const isToday = dow === today
                             return (
-                              <li
-                                key={h.id}
-                                className={`flex justify-between rounded px-2 py-0.5 text-xs ${
-                                  isToday
-                                    ? 'bg-bordeaux-50 font-semibold text-bordeaux-700'
-                                    : 'text-ink-600'
-                                }`}
-                              >
-                                <span>{DAY_LABELS[h.day_of_week]}</span>
-                                <span>{h.start_time} – {h.end_time}</span>
-                              </li>
+                              <div key={dow} className="flex flex-col items-center gap-1">
+                                <span className={`text-[10px] font-semibold ${isToday ? 'text-bordeaux-600' : 'text-ink-400'}`}>
+                                  {DAY_LABELS_SHORT[dow]}
+                                </span>
+                                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-[9px] font-medium leading-tight text-center transition-colors
+                                  ${h ? (isToday ? 'bg-bordeaux-600 text-white' : 'bg-bordeaux-50 text-bordeaux-700') : 'bg-ink-900/5 text-ink-400/50'}`}>
+                                  {h ? (
+                                    <span className="px-0.5">{h.start_time.slice(0,5)}</span>
+                                  ) : (
+                                    <span>—</span>
+                                  )}
+                                </div>
+                                {h && (
+                                  <span className={`text-[9px] leading-none ${isToday ? 'text-bordeaux-600 font-semibold' : 'text-ink-400'}`}>
+                                    {h.end_time.slice(0,5)}
+                                  </span>
+                                )}
+                              </div>
                             )
                           })}
-                        </ul>
+                        </div>
                       </dd>
                     </div>
                   </div>
                 )}
               </dl>
             </div>
+
+            {/* Banners clicáveis */}
+            {restaurant.banner1_image_url && (
+              <a
+                href={restaurant.banner1_link_url || '#'}
+                target={restaurant.banner1_link_url ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90"
+              >
+                <img
+                  src={restaurant.banner1_image_url}
+                  alt="Promoção"
+                  className="w-full object-cover"
+                  style={{ maxHeight: 160 }}
+                />
+              </a>
+            )}
+            {restaurant.banner2_image_url && (
+              <a
+                href={restaurant.banner2_link_url || '#'}
+                target={restaurant.banner2_link_url ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className="block overflow-hidden rounded-xl shadow-ticket transition-opacity hover:opacity-90"
+              >
+                <img
+                  src={restaurant.banner2_image_url}
+                  alt="Promoção"
+                  className="w-full object-cover"
+                  style={{ maxHeight: 160 }}
+                />
+              </a>
+            )}
           </div>
 
         </div>
