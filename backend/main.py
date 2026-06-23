@@ -36,19 +36,15 @@ app.add_middleware(
 )
 
 # ── Routers ────────────────────────────────────────────────
-# ORDEM IMPORTA: routers específicos ANTES das rotas inline genéricas
 app.include_router(auth.router,         prefix="/api/auth")
 app.include_router(admin.router,        prefix="/api/admin")
 app.include_router(reservations.router, prefix="/api/reservations")
-
-# chatbot e whatsapp ANTES de restaurants para que
-# /{restaurant_id}/chatbot/settings não seja engolido por /{restaurant_id}
 app.include_router(chatbot.router,     prefix="/api/restaurants")
 app.include_router(whatsapp.router,    prefix="/api/restaurants")
 app.include_router(restaurants.router, prefix="/api/restaurants")
 
 
-# ── Rotas inline — todas DEPOIS dos routers ───────────────
+# ── Rotas inline ───────────────────────────────────────────
 
 @app.get("/api/restaurants", tags=["Public"])
 def list_restaurants_public(
@@ -103,7 +99,7 @@ def get_restaurant_analytics(
     }
 
 
-@app.post("/api/restaurants", tags=["Public"], status_code=201)
+@app.post("/api/restaurants", tags=["Restaurants"], status_code=201)
 def create_restaurant_public(
     data: RestaurantCreate,
     db: Session = Depends(get_db),
@@ -118,11 +114,56 @@ def create_restaurant_public(
     return restaurant.to_dict()
 
 
+class RestaurantUpdate(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    description: str | None = None
+    city: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+    cuisine_type: str | None = None
+    whatsapp_number: str | None = None
+    cover_image_url: str | None = None
+    logo_url: str | None = None
+    max_party_size: int | None = None
+
+
+@app.put("/api/restaurants/{restaurant_id}", tags=["Restaurants"])
+def update_restaurant(
+    restaurant_id: str,
+    data: RestaurantUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from uuid import UUID
+    try:
+        uid = UUID(restaurant_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="restaurant_id inválido")
+
+    r = db.query(Restaurant).filter(Restaurant.id == uid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado")
+
+    is_super = current_user.role == UserRole.SUPER_ADMIN
+    is_owner = str(r.owner_id) == str(current_user.id)
+    if not (is_super or is_owner):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(r, field, value)
+
+    db.commit()
+    db.refresh(r)
+    return r.to_dict()
+
+
 class StatusUpdate(BaseModel):
     status: str
 
 
-@app.patch("/api/restaurants/{restaurant_id}/status", tags=["Public"])
+@app.patch("/api/restaurants/{restaurant_id}/status", tags=["Restaurants"])
 def set_restaurant_status(
     restaurant_id: str,
     data: StatusUpdate,
