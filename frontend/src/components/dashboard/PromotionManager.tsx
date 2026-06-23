@@ -12,6 +12,18 @@ const EMPTY: CreatePromotionPayload = {
   valid_from: '', valid_until: '', conditions: undefined,
 }
 
+// Converte "2026-08-01" → "2026-08-01T00:00:00" para o backend Pydantic
+function toDatetime(date: string): string {
+  if (!date) return date
+  return date.includes('T') ? date : `${date}T00:00:00`
+}
+
+// Converte "2026-08-01T00:00:00" → "2026-08-01" para o input type="date"
+function toDateInput(dt: string): string {
+  if (!dt) return dt
+  return dt.split('T')[0]
+}
+
 export function PromotionManager({ restaurantId }: { restaurantId: string }) {
   const [promotions, setPromotions] = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,12 +56,17 @@ export function PromotionManager({ restaurantId }: { restaurantId: string }) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault(); if (!validate()) return
     setSaving(true); setError(null)
+    const payload: CreatePromotionPayload = {
+      ...form,
+      valid_from: toDatetime(form.valid_from),
+      valid_until: toDatetime(form.valid_until),
+    }
     try {
       if (editingId) {
-        const u = await restaurantsService.updatePromotion(restaurantId, editingId, form)
+        const u = await restaurantsService.updatePromotion(restaurantId, editingId, payload)
         setPromotions((p) => p.map((x) => (x.id === editingId ? u : x)))
       } else {
-        const c = await restaurantsService.createPromotion(restaurantId, form)
+        const c = await restaurantsService.createPromotion(restaurantId, payload)
         setPromotions((p) => [c, ...p])
       }
       setFormOpen(false)
@@ -64,8 +81,8 @@ export function PromotionManager({ restaurantId }: { restaurantId: string }) {
       description: p.description || '',
       discount_type: p.discount_type,
       discount_value: p.discount_value,
-      valid_from: p.valid_from,
-      valid_until: p.valid_until,
+      valid_from: toDateInput(p.valid_from),
+      valid_until: toDateInput(p.valid_until),
       conditions: p.conditions,
     })
     setFormOpen(true)
@@ -120,10 +137,12 @@ export function PromotionManager({ restaurantId }: { restaurantId: string }) {
               <div>
                 <label className="label-field">De</label>
                 <input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className="input-field" />
+                {errors.valid_from && <p className="error-text">{errors.valid_from}</p>}
               </div>
               <div>
                 <label className="label-field">Até</label>
                 <input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className="input-field" />
+                {errors.valid_until && <p className="error-text">{errors.valid_until}</p>}
               </div>
             </div>
             <div className="flex justify-end gap-2">
