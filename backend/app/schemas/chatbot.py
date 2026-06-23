@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):
-    restaurant_id: UUID
+    restaurant_id: Optional[UUID] = None  # pode vir na URL ou no body
     client_phone: str
     message: str
 
