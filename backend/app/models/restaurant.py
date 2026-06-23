@@ -1,7 +1,7 @@
 """Restaurant model — the core multi-tenant entity."""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Text
+from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.utils.db import Base
@@ -15,11 +15,18 @@ class Restaurant(Base):
     slug = Column(String(255), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    network_group_id = Column(UUID(as_uuid=True), nullable=True)  # For restaurant chains
+    network_group_id = Column(UUID(as_uuid=True), nullable=True)
+
+    # Novos campos de perfil público
+    cuisine_type = Column(String(100), nullable=True)
+    cover_image_url = Column(String(500), nullable=True)
+    logo_url = Column(String(500), nullable=True)
+    max_party_size = Column(Integer, nullable=True)
 
     # Contact
     phone = Column(String(20), nullable=True)
     email = Column(String(255), nullable=True)
+    whatsapp_number = Column(String(20), nullable=True)
 
     # Location
     address = Column(String(500), nullable=True)
@@ -52,8 +59,13 @@ class Restaurant(Base):
             "name": self.name,
             "slug": self.slug,
             "description": self.description,
+            "cuisine_type": self.cuisine_type,
+            "cover_image_url": self.cover_image_url,
+            "logo_url": self.logo_url,
+            "max_party_size": self.max_party_size,
             "phone": self.phone,
             "email": self.email,
+            "whatsapp_number": self.whatsapp_number,
             "address": self.address,
             "city": self.city,
             "latitude": self.latitude,
